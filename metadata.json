@@ -1,0 +1,6 @@
+{
+  "name": "ระบบจัดการตารางกะและวันหยุด",
+  "description": "ระบบจัดการตารางกะ วันหยุดบริษัท จัดการสิทธิ์แยกตามแผนกสำหรับแอดมินและหัวหน้าแผนก พร้อมระบบบันทึกประวัติการแก้ไขข้อมูล (Audit Log)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
