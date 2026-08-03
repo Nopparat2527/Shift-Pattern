@@ -118,6 +118,7 @@ interface AppContextType {
   updateDepartment: (id: string, dept: Partial<Department>) => void;
   deleteDepartment: (id: string) => void;
   assignSupervisor: (deptId: string, supervisorUserId: string | undefined) => void;
+  assignSupervisors: (deptId: string, supervisorUserIds: string[]) => void;
 
   // User Management (Admin)
   addUser: (user: Omit<User, 'id'>) => void;
@@ -339,8 +340,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Access Control Function
   const canAccessDepartment = (deptId: string) => {
     if (isAdmin) return true;
-    if (isSupervisor && userDepartmentId === deptId) return true;
-    if (currentUser.role === 'EMPLOYEE' && userDepartmentId === deptId) return true;
+    if (userDepartmentId === deptId) return true;
+    const targetDept = departments.find((d) => d.id === deptId);
+    if (isSupervisor && targetDept && targetDept.supervisorIds?.includes(currentUser.id)) return true;
     return false;
   };
 
@@ -688,13 +690,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const assignSupervisor = (deptId: string, supervisorUserId: string | undefined) => {
+  const assignSupervisors = (deptId: string, supervisorUserIds: string[]) => {
     const dept = departments.find((d) => d.id === deptId);
     if (!dept) return;
 
     const oldSupName = dept.supervisorName || 'ยังไม่ได้ตั้งแต่ง';
-    const supUser = users.find((u) => u.id === supervisorUserId);
-    const newSupName = supUser ? supUser.name : 'ยังไม่ได้ตั้งแต่ง';
+    const selectedUsers = users.filter((u) => supervisorUserIds.includes(u.id));
+    const supNames = selectedUsers.map((u) => u.name);
+    const newSupName = supNames.length > 0 ? supNames.join(', ') : 'ยังไม่ได้ตั้งแต่ง';
 
     // Update department supervisor
     setDepartments((prev) =>
@@ -702,31 +705,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         d.id === deptId
           ? {
               ...d,
-              supervisorId: supervisorUserId,
+              supervisorId: supervisorUserIds[0] || undefined,
               supervisorName: newSupName,
+              supervisorIds: supervisorUserIds,
+              supervisorNames: supNames,
             }
           : d
       )
     );
 
-    // Also update supervisor user's assigned department
-    if (supervisorUserId) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === supervisorUserId
-            ? { ...u, role: 'SUPERVISOR', departmentId: deptId }
-            : u
-        )
-      );
-    }
+    // Also update supervisor users' assigned department
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (supervisorUserIds.includes(u.id)) {
+          return {
+            ...u,
+            role: u.role === 'ADMIN' ? 'ADMIN' : 'SUPERVISOR',
+            departmentId: deptId,
+          };
+        }
+        // If user was previously assigned to this dept as supervisor, but removed now:
+        if (u.departmentId === deptId && u.role === 'SUPERVISOR') {
+          return {
+            ...u,
+            departmentId: undefined,
+          };
+        }
+        return u;
+      })
+    );
 
     addAuditLog(
       'DEPARTMENT',
       'แต่งตั้งหัวหน้าแผนก',
       dept.name,
       `หัวหน้าเดิม: ${oldSupName}`,
-      `หัวหน้าใหม่: ${newSupName}`
+      `หัวหน้าใหม่ (${supNames.length} คน): ${newSupName}`
     );
+  };
+
+  const assignSupervisor = (deptId: string, supervisorUserId: string | undefined) => {
+    assignSupervisors(deptId, supervisorUserId ? [supervisorUserId] : []);
   };
 
   // --- User Management Actions ---
@@ -1420,6 +1439,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDepartment,
         deleteDepartment,
         assignSupervisor,
+        assignSupervisors,
 
         addUser,
         updateUserRole,

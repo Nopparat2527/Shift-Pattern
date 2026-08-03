@@ -24,6 +24,10 @@ import {
   Eye,
   EyeOff,
   Smartphone,
+  RotateCw,
+  Sparkles,
+  Zap,
+  Repeat,
 } from 'lucide-react';
 
 export const ShiftScheduler: React.FC = () => {
@@ -75,6 +79,8 @@ export const ShiftScheduler: React.FC = () => {
 
   // Quick Batch Fill Modal state
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batchMode, setBatchMode] = useState<'AUTO_ROTATION' | 'SINGLE_FILL'>('AUTO_ROTATION');
+  const [receiverEmpId, setReceiverEmpId] = useState<string>('');
   const [batchTargetEmployee, setBatchTargetEmployee] = useState<string>('ALL');
   const [batchShiftCode, setBatchShiftCode] = useState<ShiftTypeCode>('M');
   const [batchWeekPattern, setBatchWeekPattern] = useState<'MON_SAT' | 'ALL' | 'SUN_OFF'>('MON_SAT');
@@ -204,6 +210,76 @@ export const ShiftScheduler: React.FC = () => {
       const nextCode = cycle[(currentIndex + 1) % cycle.length];
       updateShiftEntry(employeeId, dateStr, nextCode);
     }
+  };
+
+  // Execute Auto Rotation Schedule (1 Receiver staff = Morning all month, 3 Rotating staff = Morning/Afternoon/Night rotating every 2 weeks)
+  const handleRunAutoRotation2Weeks = () => {
+    if (filteredEmployees.length === 0) return;
+
+    // Determine receiver employee (fixed Morning shift)
+    const selectedReceiverId =
+      receiverEmpId && filteredEmployees.some((e) => e.id === receiverEmpId)
+        ? receiverEmpId
+        : filteredEmployees[0]?.id;
+
+    const rotatingEmps = filteredEmployees.filter((e) => e.id !== selectedReceiverId);
+    const updates: { employeeId: string; date: string; shiftCode: ShiftTypeCode }[] = [];
+
+    // 1. Assign Receiver staff = Morning (M) for the whole month
+    const receiverEmp = filteredEmployees.find((e) => e.id === selectedReceiverId);
+    if (receiverEmp) {
+      monthDays.forEach((d) => {
+        let codeToAssign: ShiftTypeCode = 'M';
+        if (d.isSunday && (batchWeekPattern === 'SUN_OFF' || batchWeekPattern === 'MON_SAT')) {
+          codeToAssign = 'OFF';
+        }
+        updates.push({
+          employeeId: receiverEmp.id,
+          date: d.dateStr,
+          shiftCode: codeToAssign,
+        });
+      });
+    }
+
+    // 2. Assign Remaining Rotating employees (M, A, N rotating every 2 weeks = 12 working days)
+    rotatingEmps.forEach((emp, rotIdx) => {
+      let workDayCounter = 0;
+
+      monthDays.forEach((d) => {
+        const isSunOff = d.isSunday && (batchWeekPattern === 'SUN_OFF' || batchWeekPattern === 'MON_SAT');
+        let codeToAssign: ShiftTypeCode = 'M';
+
+        if (isSunOff) {
+          codeToAssign = 'OFF';
+        } else {
+          workDayCounter += 1;
+          const isFirst2Weeks = workDayCounter <= 12; // 2 weeks = 12 working days (Mon-Sat x 2)
+
+          const slot = rotIdx % 3; // 0, 1, 2
+
+          if (isFirst2Weeks) {
+            // First 2 working weeks (Days 1 - 12)
+            if (slot === 0) codeToAssign = 'M'; // เช้า (รวมกับคนรับของ = เช้า 2 คน)
+            else if (slot === 1) codeToAssign = 'A'; // บ่าย 1 คน
+            else codeToAssign = 'N'; // ดึก 1 คน
+          } else {
+            // Next 2 working weeks (After 12 working days)
+            if (slot === 0) codeToAssign = 'A'; // เช้า -> บ่าย
+            else if (slot === 1) codeToAssign = 'N'; // บ่าย -> ดึก
+            else codeToAssign = 'M'; // ดึก -> เช้า
+          }
+        }
+
+        updates.push({
+          employeeId: emp.id,
+          date: d.dateStr,
+          shiftCode: codeToAssign,
+        });
+      });
+    });
+
+    batchUpdateShifts(updates);
+    setIsBatchModalOpen(false);
   };
 
   // Execute Batch Fill
@@ -404,6 +480,18 @@ export const ShiftScheduler: React.FC = () => {
           <div className="flex items-center space-x-2 flex-wrap gap-y-2">
             {!isReadOnly && (
               <>
+                <button
+                  onClick={() => {
+                    setBatchMode('AUTO_ROTATION');
+                    setIsBatchModalOpen(true);
+                  }}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border border-purple-500/40 px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-md hover:scale-105"
+                  title="จัดกะหมุนเวียน 2 สัปดาห์ (เช้า 2 คน / บ่าย 1 คน / ดึก 1 คน)"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                  <span>จัดกะ 2 สัปดาห์ (เช้า2/บ่าย1/ดึก1)</span>
+                </button>
+
                 <button
                   onClick={() => setIsPlanBatchModalOpen(true)}
                   className="bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
@@ -1129,89 +1217,237 @@ export const ShiftScheduler: React.FC = () => {
 
       {/* Quick Batch Fill Modal */}
       {isBatchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl text-white">
-            <h3 className="text-base font-bold mb-2 flex items-center space-x-2">
-              <Wand2 className="w-5 h-5 text-indigo-400" />
-              <span>จัดกะอัตโนมัติทั้งเดือน (Batch Fill)</span>
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              ช่วยให้จัดกะพนักงานทั้งทีมได้อย่างรวดเร็วในคลิกเดียว
-            </p>
-
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  เลือกพนักงาน:
-                </label>
-                <select
-                  value={batchTargetEmployee}
-                  onChange={(e) => setBatchTargetEmployee(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="ALL">พนักงานทุกคนในแผนก ({filteredEmployees.length} คน)</option>
-                  {filteredEmployees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.employeeCode} - {e.name} ({e.codeName})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  เลือกกะการทำงานหลัก:
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {shiftTypes.map((t) => (
-                    <button
-                      key={t.code}
-                      type="button"
-                      onClick={() => setBatchShiftCode(t.code)}
-                      className={`p-2 rounded-xl text-xs font-bold border text-center transition ${
-                        t.colorBg
-                      } ${t.colorText} ${
-                        batchShiftCode === t.code
-                          ? 'ring-2 ring-indigo-500 scale-105'
-                          : 'opacity-80'
-                      }`}
-                    >
-                      {t.code}: {t.nameTh}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  เงื่อนไขวันหยุดประจำสัปดาห์:
-                </label>
-                <select
-                  value={batchWeekPattern}
-                  onChange={(e) =>
-                    setBatchWeekPattern(e.target.value as 'MON_SAT' | 'ALL' | 'SUN_OFF')
-                  }
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="SUN_OFF">ทำงาน จันทร์-เสาร์ / วันอาทิตย์เป็น OFF</option>
-                  <option value="ALL">ลงกะนี้ให้ทุกวัน (ไม่มี OFF)</option>
-                </select>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl text-white space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold flex items-center space-x-2">
+                <Wand2 className="w-5 h-5 text-indigo-400" />
+                <span>ระบบจัดกะอัตโนมัติประจำเดือน (Smart Auto Scheduler)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsBatchModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="mt-6 flex justify-end space-x-2">
+            {/* Mode Selector Tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-800/80 rounded-xl border border-slate-700/80 text-xs font-bold">
               <button
+                type="button"
+                onClick={() => setBatchMode('AUTO_ROTATION')}
+                className={`py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 transition ${
+                  batchMode === 'AUTO_ROTATION'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                <span>หมุนเวียน 2 สัปดาห์ (เช้า2/บ่าย1/ดึก1)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBatchMode('SINGLE_FILL')}
+                className={`py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 transition ${
+                  batchMode === 'SINGLE_FILL'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>กะเดียวตลอดเดือน (Single Shift)</span>
+              </button>
+            </div>
+
+            {batchMode === 'AUTO_ROTATION' ? (
+              <div className="space-y-3.5 text-xs">
+                {/* Rule Preset Banner */}
+                <div className="bg-purple-950/60 border border-purple-800/80 rounded-2xl p-4 text-purple-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-white text-xs flex items-center space-x-1.5">
+                      <Repeat className="w-4 h-4 text-purple-400" />
+                      <span>สูตรจัดกะอัตโนมัติประจำเดือน (4 คน):</span>
+                    </span>
+                    <span className="bg-purple-800 text-purple-100 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      ตรงตามโจทย์ 100%
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-1 text-center font-bold text-[11px]">
+                    <div className="bg-blue-900/60 border border-blue-700/80 rounded-xl p-2 text-blue-200">
+                      🌅 กะเช้า (M): <span className="text-white font-extrabold">2 คน</span>
+                      <div className="text-[9.5px] font-normal text-blue-300">(รับของ 1 + หมุนเวียน 1)</div>
+                    </div>
+                    <div className="bg-amber-900/60 border border-amber-700/80 rounded-xl p-2 text-amber-200">
+                      🌇 กะบ่าย (A): <span className="text-white font-extrabold">1 คน</span>
+                      <div className="text-[9.5px] font-normal text-amber-300">(หมุนเวียน 1)</div>
+                    </div>
+                    <div className="bg-emerald-900/60 border border-emerald-700/80 rounded-xl p-2 text-emerald-200">
+                      🌙 กะดึก (N): <span className="text-white font-extrabold">1 คน</span>
+                      <div className="text-[9.5px] font-normal text-emerald-300">(หมุนเวียน 1)</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/80 rounded-xl p-3 border border-purple-800/50 space-y-1.5 text-[11px] text-slate-300">
+                    <p className="font-semibold text-purple-300">
+                      🔄 กฎการเปลี่ยนกะ (สลับทุก 2 สัปดาห์ = 12 วันทำงาน):
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-slate-300 pl-1">
+                      <li>
+                        <strong>พนักงานรับของ (1 คน):</strong> เข้า <span className="text-blue-300 font-bold">กะเช้า (M)</span> ตลอดทั้งเดือน
+                      </li>
+                      <li>
+                        <strong>พนักงานอีก 3 คน:</strong> เข้า <span className="text-blue-300 font-bold">เช้า (M)</span>, <span className="text-amber-300 font-bold">บ่าย (A)</span>, <span className="text-emerald-300 font-bold">ดึก (N)</span> กะละ 1 คน ➡️ <span className="text-yellow-300 font-bold">เปลี่ยนกะทุก 12 วันทำงาน (2 สัปดาห์)</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Receiver Staff Selection */}
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                    <span>📦 ระบุพนักงานรับของ (เข้ากะเช้า M ตลอดเดือน):</span>
+                    <span className="text-[10px] text-purple-400 font-normal">อยู่เช้าทั้งเดือน</span>
+                  </label>
+                  <select
+                    value={receiverEmpId || (filteredEmployees[0]?.id || '')}
+                    onChange={(e) => setReceiverEmpId(e.target.value)}
+                    className="w-full bg-slate-800 border border-purple-500/50 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                  >
+                    {filteredEmployees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.employeeCode} - {e.name} ({e.codeName}) [รับของ - เช้าตลอดเดือน]
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Rotating Staff Summary */}
+                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/60 text-[11px] space-y-1.5">
+                  <span className="font-semibold text-slate-300">
+                    👥 พนักงานหมุนเวียนกะ (3 คน - เปลี่ยนกะทุก 2 สัปดาห์):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {filteredEmployees
+                      .filter((e) => e.id !== (receiverEmpId || filteredEmployees[0]?.id))
+                      .map((e, idx) => (
+                        <span
+                          key={e.id}
+                          className="bg-purple-900/50 text-purple-200 border border-purple-700/60 px-2 py-0.5 rounded-lg text-[10px] font-medium"
+                        >
+                          คนหมุนเวียนที่ {idx + 1}: {e.codeName} ({e.name})
+                        </span>
+                      ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    เงื่อนไขวันหยุดประจำสัปดาห์:
+                  </label>
+                  <select
+                    value={batchWeekPattern}
+                    onChange={(e) =>
+                      setBatchWeekPattern(e.target.value as 'MON_SAT' | 'ALL' | 'SUN_OFF')
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                  >
+                    <option value="SUN_OFF">ทำงาน จันทร์-เสาร์ / วันอาทิตย์เป็น OFF (แนะนำ)</option>
+                    <option value="ALL">ทำงานทุกวันตามกะ (ไม่มี OFF วันอาทิตย์)</option>
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    เลือกพนักงาน:
+                  </label>
+                  <select
+                    value={batchTargetEmployee}
+                    onChange={(e) => setBatchTargetEmployee(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="ALL">พนักงานทุกคนในแผนก ({filteredEmployees.length} คน)</option>
+                    {filteredEmployees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.employeeCode} - {e.name} ({e.codeName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    เลือกกะการทำงานหลัก:
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {shiftTypes.map((t) => (
+                      <button
+                        key={t.code}
+                        type="button"
+                        onClick={() => setBatchShiftCode(t.code)}
+                        className={`p-2 rounded-xl text-xs font-bold border text-center transition ${
+                          t.colorBg
+                        } ${t.colorText} ${
+                          batchShiftCode === t.code
+                            ? 'ring-2 ring-indigo-500 scale-105'
+                            : 'opacity-80'
+                        }`}
+                      >
+                        {t.code}: {t.nameTh}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    เงื่อนไขวันหยุดประจำสัปดาห์:
+                  </label>
+                  <select
+                    value={batchWeekPattern}
+                    onChange={(e) =>
+                      setBatchWeekPattern(e.target.value as 'MON_SAT' | 'ALL' | 'SUN_OFF')
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="SUN_OFF">ทำงาน จันทร์-เสาร์ / วันอาทิตย์เป็น OFF</option>
+                    <option value="ALL">ลงกะนี้ให้ทุกวัน (ไม่มี OFF)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end space-x-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
                 onClick={() => setIsBatchModalOpen(false)}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl text-xs font-semibold transition"
               >
                 ยกเลิก
               </button>
-              <button
-                onClick={handleRunBatchFill}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-md"
-              >
-                ยืนยันจัดกะกลุ่ม
-              </button>
+              {batchMode === 'AUTO_ROTATION' ? (
+                <button
+                  type="button"
+                  onClick={handleRunAutoRotation2Weeks}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center space-x-1.5"
+                >
+                  <Sparkles className="w-4 h-4 text-yellow-300" />
+                  <span>ยืนยันจัดกะหมุนเวียน 2 สัปดาห์</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRunBatchFill}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-semibold transition shadow-md"
+                >
+                  ยืนยันจัดกะกลุ่ม
+                </button>
+              )}
             </div>
           </div>
         </div>

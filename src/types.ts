@@ -14,8 +14,10 @@ export interface Department {
   id: string;
   name: string;
   code: string; // e.g., 'F&P', 'INJ', 'MAINT'
-  supervisorId?: string; // ID of assigned supervisor
-  supervisorName?: string;
+  supervisorId?: string; // Primary/legacy assigned supervisor ID
+  supervisorName?: string; // Primary/legacy assigned supervisor name(s)
+  supervisorIds?: string[]; // IDs of assigned supervisors (supports multiple)
+  supervisorNames?: string[]; // Names of assigned supervisors
   description?: string;
   employeeCount?: number;
 }
