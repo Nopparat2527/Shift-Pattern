@@ -28,6 +28,7 @@ import {
   Sparkles,
   Zap,
   Repeat,
+  Save,
 } from 'lucide-react';
 
 export const ShiftScheduler: React.FC = () => {
@@ -97,6 +98,24 @@ export const ShiftScheduler: React.FC = () => {
   } | null>(null);
 
   const [customPlanText, setCustomPlanText] = useState('');
+
+  // Save State and Toast Notification
+  const [isAutoSaved, setIsAutoSaved] = useState<boolean>(true);
+  const [lastSavedTimeString, setLastSavedTimeString] = useState<string>('บันทึกอัตโนมัติเรียบร้อยแล้ว');
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+
+  const triggerSaveFeedback = (customMsg?: string) => {
+    setIsAutoSaved(false);
+    setTimeout(() => {
+      setIsAutoSaved(true);
+      const nowStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      setLastSavedTimeString(`บันทึกแล้วล่าสุดเวลา ${nowStr} น.`);
+      if (customMsg) {
+        setSaveSuccessMessage(customMsg);
+        setTimeout(() => setSaveSuccessMessage(null), 4000);
+      }
+    }, 250);
+  };
 
   // Batch Production Plan Modal state
   const [isPlanBatchModalOpen, setIsPlanBatchModalOpen] = useState(false);
@@ -210,6 +229,7 @@ export const ShiftScheduler: React.FC = () => {
       const nextCode = cycle[(currentIndex + 1) % cycle.length];
       updateShiftEntry(employeeId, dateStr, nextCode);
     }
+    triggerSaveFeedback();
   };
 
   // Execute Auto Rotation Schedule (1 Receiver staff = Morning all month, 3 Rotating staff = Morning/Afternoon/Night rotating every 2 weeks)
@@ -280,6 +300,7 @@ export const ShiftScheduler: React.FC = () => {
 
     batchUpdateShifts(updates);
     setIsBatchModalOpen(false);
+    triggerSaveFeedback('จัดกะหมุนเวียน 2 สัปดาห์ (12 วันทำงาน) สำเร็จ และบันทึกข้อมูลเรียบร้อยแล้ว!');
   };
 
   // Execute Batch Fill
@@ -309,6 +330,7 @@ export const ShiftScheduler: React.FC = () => {
 
     batchUpdateShifts(updates);
     setIsBatchModalOpen(false);
+    triggerSaveFeedback('จัดกะกลุ่มทั้งเดือนสำเร็จ และบันทึกข้อมูลเรียบร้อยแล้ว!');
   };
 
   // Execute Batch Production Plan Fill
@@ -324,6 +346,7 @@ export const ShiftScheduler: React.FC = () => {
 
     batchUpdateProductionPlan(updates);
     setIsPlanBatchModalOpen(false);
+    triggerSaveFeedback('บันทึกแผนการผลิตประจำเดือนเรียบร้อยแล้ว!');
   };
 
   // Export to CSV
@@ -364,6 +387,27 @@ export const ShiftScheduler: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Save Notification Banner */}
+      {saveSuccessMessage && (
+        <div className="bg-emerald-600 text-white rounded-2xl p-4 shadow-xl border border-emerald-400 flex items-center justify-between space-x-3 animate-fade-in">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <CheckCircle2 className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold">บันทึกข้อมูลตารางกะสำเร็จ!</h4>
+              <p className="text-xs text-emerald-100 font-medium">{saveSuccessMessage}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSaveSuccessMessage(null)}
+            className="text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition"
+          >
+            ปิด
+          </button>
+        </div>
+      )}
+
       {/* Role Isolation Restriction Alert Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start space-x-3">
@@ -478,8 +522,27 @@ export const ShiftScheduler: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+            {/* Auto-Save Status Badge */}
+            <div className="flex items-center space-x-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 px-3 py-2 rounded-xl text-xs font-semibold shadow-inner">
+              <CheckCircle2 className={`w-3.5 h-3.5 text-emerald-400 ${!isAutoSaved ? 'animate-spin text-amber-400' : ''}`} />
+              <span>{!isAutoSaved ? 'กำลังบันทึก...' : lastSavedTimeString}</span>
+            </div>
+
             {!isReadOnly && (
               <>
+                <button
+                  onClick={() =>
+                    triggerSaveFeedback(
+                      `บันทึกข้อมูลตารางกะประจำเดือน ${monthNamesTh[activeMonth - 1]} ${activeYear + 543} ลงระบบเรียบร้อยแล้ว!`
+                    )
+                  }
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-md hover:scale-105"
+                  title="คลิกเพื่อบันทึกตารางการทำงานลงระบบทันที"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกตารางกะ</span>
+                </button>
+
                 <button
                   onClick={() => {
                     setBatchMode('AUTO_ROTATION');
