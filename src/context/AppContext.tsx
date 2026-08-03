@@ -958,6 +958,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...updateData } : e)));
 
+    // Sync users and currentUser if name or codeName changed
+    if (updateData.name || updateData.codeName) {
+      const newName = updateData.name || oldEmp.name;
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id === `user-emp-${id}` || u.name === oldEmp.name) {
+            return { ...u, name: newName };
+          }
+          return u;
+        })
+      );
+      if (currentUser.id === `user-emp-${id}` || currentUser.name === oldEmp.name) {
+        setCurrentUser((prev) => ({ ...prev, name: newName }));
+      }
+    }
+
     addAuditLog(
       'TEAM_MEMBER',
       'แก้ไขข้อมูลพนักงาน',

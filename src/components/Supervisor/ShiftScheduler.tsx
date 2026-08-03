@@ -1017,6 +1017,7 @@ export const ShiftScheduler: React.FC = () => {
                         if (!isReadOnly) {
                           if (activeFPBrush !== null) {
                             updateProductionPlan(d.dateStr, 'fp', activeFPBrush === '-' ? '' : activeFPBrush);
+                            triggerSaveFeedback();
                           } else {
                             setSelectedPlanCell({
                               dateStr: d.dateStr,
@@ -1079,6 +1080,7 @@ export const ShiftScheduler: React.FC = () => {
                         if (!isReadOnly) {
                           if (activeINJBrush !== null) {
                             updateProductionPlan(d.dateStr, 'inj', activeINJBrush === '-' ? '' : activeINJBrush);
+                            triggerSaveFeedback();
                           } else {
                             setSelectedPlanCell({
                               dateStr: d.dateStr,
@@ -1657,6 +1659,7 @@ export const ShiftScheduler: React.FC = () => {
               <button
                 onClick={() => {
                   updateProductionPlan(selectedPlanCell.dateStr, selectedPlanCell.field, '');
+                  triggerSaveFeedback();
                   setSelectedPlanCell(null);
                 }}
                 className="text-rose-400 hover:text-rose-300 font-semibold text-xs underline"
@@ -1677,6 +1680,7 @@ export const ShiftScheduler: React.FC = () => {
                       selectedPlanCell.field,
                       customPlanText
                     );
+                    triggerSaveFeedback();
                     setSelectedPlanCell(null);
                   }}
                   className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition shadow-md"

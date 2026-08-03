@@ -45,6 +45,18 @@ export const TeamManager: React.FC = () => {
   const activeDeptId = userDepartmentId || departments[0]?.id || '';
   const currentDept = departments.find((d) => d.id === activeDeptId);
 
+  // Access control
+  const canManageTeam = isAdmin || isSupervisor;
+
+  // Helper to check if an employee is the current logged-in user
+  const checkIsSelf = (emp: Employee) => {
+    const cleanCurrentId = currentUser.id.replace('user-emp-', '');
+    if (emp.id === cleanCurrentId) return true;
+    if (currentUser.email && currentUser.email.startsWith(emp.employeeCode)) return true;
+    if (currentUser.name && (currentUser.name.includes(emp.name) || currentUser.name.includes(emp.codeName))) return true;
+    return false;
+  };
+
   // Filter employees restricted to Supervisor's department
   const myTeam = employees.filter((emp) => {
     const isDeptMatch = isAdmin ? true : emp.departmentId === activeDeptId;
@@ -63,7 +75,7 @@ export const TeamManager: React.FC = () => {
       setCodeName(emp.codeName);
       setPosition(emp.position);
       setPhone(emp.phone || '');
-      setJoinDate(emp.joinDate);
+      setJoinDate(emp.joinDate || '2026-01-01');
       setTargetDeptId(emp.departmentId);
     } else {
       setEditingEmployee(null);
@@ -108,6 +120,9 @@ export const TeamManager: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const isEditingSelf = editingEmployee ? checkIsSelf(editingEmployee) : false;
+  const isEmployeeOnlySelf = isEditingSelf && !canManageTeam;
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -116,23 +131,27 @@ export const TeamManager: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Users className="w-6 h-6 text-amber-400" />
             <h2 className="text-lg font-bold">
-              จัดการรายชื่อลูกน้องในทีม ({currentDept?.name || 'แผนกของคุณ'})
+              รายชื่อสมาชิกในทีม ({currentDept?.name || 'แผนกของคุณ'})
             </h2>
           </div>
           <p className="text-xs text-slate-300 mt-1">
             {isSupervisor
-              ? `🔒 ข้อมูลจำกัดเฉพาะหัวหน้าแผนก ${currentDept?.code} - ไม่เห็นข้อมูลลูกน้องแผนกอื่น`
-              : '👑 สิทธิ์แอดมิน: สามารถเพิ่ม แก้ไข และย้ายลูกน้องประจำแต่ละแผนกได้'}
+              ? `🔒 หัวหน้าแผนก ${currentDept?.code || ''}: สิทธิ์จัดการเพิ่ม/แก้ไข/ลบข้อมูลพนักงานในทีม`
+              : isAdmin
+              ? '👑 สิทธิ์แอดมิน: สามารถเพิ่ม แก้ไข และย้ายลูกน้องประจำแต่ละแผนกได้'
+              : '👤 สิทธิ์พนักงาน: คุณสามารถแก้ไข "วันที่เริ่มงาน" และ "เบอร์โทรศัพท์" ของตนเองได้ (เพื่อนในทีมหรือนอกทีมไม่สามารถแก้ไขได้)'}
           </p>
         </div>
 
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 transition shadow-md shrink-0"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>เพิ่มพนักงานเข้าทีม</span>
-        </button>
+        {canManageTeam && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 transition shadow-md shrink-0"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>เพิ่มพนักงานเข้าทีม</span>
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -155,83 +174,113 @@ export const TeamManager: React.FC = () => {
 
       {/* Team Member Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {myTeam.map((emp) => (
-          <div
-            key={emp.id}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition relative group"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold flex items-center justify-center text-base border border-amber-500/30">
-                  {emp.codeName}
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                    {emp.name}
-                  </h3>
-                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                    ชื่อเล่น: {emp.codeName}
+        {myTeam.map((emp) => {
+          const isSelf = checkIsSelf(emp);
+          const canEditThisEmp = canManageTeam || isSelf;
+          const canDeleteThisEmp = canManageTeam;
+
+          return (
+            <div
+              key={emp.id}
+              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm hover:shadow-md transition relative group ${
+                isSelf
+                  ? 'border-amber-400/80 dark:border-amber-500/60 ring-1 ring-amber-400/30'
+                  : 'border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold flex items-center justify-center text-base border border-amber-500/30">
+                    {emp.codeName}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                        {emp.name}
+                      </h3>
+                      {isSelf && (
+                        <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                          ตัวคุณ
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      ชื่อเล่น: {emp.codeName}
+                    </div>
                   </div>
                 </div>
+
+                <div className="flex items-center space-x-1">
+                  {canEditThisEmp && (
+                    <button
+                      onClick={() => handleOpenModal(emp)}
+                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-amber-500 rounded-lg transition"
+                      title={
+                        isSelf && !canManageTeam
+                          ? 'แก้ไขวันที่เริ่มงานและเบอร์โทรส่วนตัว'
+                          : 'แก้ไขข้อมูลพนักงาน'
+                      }
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {canDeleteThisEmp && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`คุณต้องการลบพนักงาน ${emp.name} ออกจากทีมใช่หรือไม่?`)) {
+                          deleteEmployee(emp.id);
+                        }
+                      }}
+                      className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded-lg transition"
+                      title="ลบออกจากทีม"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {!canEditThisEmp && !canDeleteThisEmp && (
+                    <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-medium">
+                      🔒 อ่านอย่างเดียว
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center space-x-1 opacity-90 group-hover:opacity-100 transition">
-                <button
-                  onClick={() => handleOpenModal(emp)}
-                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 rounded-lg transition"
-                  title="แก้ไขข้อมูล"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`คุณต้องการลบพนักงาน ${emp.name} ออกจากทีมใช่หรือไม่?`)) {
-                      deleteEmployee(emp.id);
-                    }
-                  }}
-                  className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded-lg transition"
-                  title="ลบออกจากทีม"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center space-x-1.5 text-slate-500">
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>ตำแหน่ง:</span>
+                  </span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {emp.position}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center space-x-1.5 text-slate-500">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>เบอร์โทร:</span>
+                  </span>
+                  <span className="font-mono">{emp.phone || '-'}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center space-x-1.5 text-slate-500">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>วันที่เริ่มงาน:</span>
+                  </span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">{emp.joinDate || '-'}</span>
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  ● ปฏิบัติงานปกติ
+                </span>
               </div>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center space-x-1.5 text-slate-500">
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>ตำแหน่ง:</span>
-                </span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">
-                  {emp.position}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center space-x-1.5 text-slate-500">
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>เบอร์โทร:</span>
-                </span>
-                <span className="font-mono">{emp.phone || '-'}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center space-x-1.5 text-slate-500">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>วันที่เริ่มงาน:</span>
-                </span>
-                <span>{emp.joinDate}</span>
-              </div>
-            </div>
-
-            <div className="mt-3 flex justify-end">
-              <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                ● ปฏิบัติงานปกติ
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add / Edit Employee Modal */}
@@ -242,8 +291,23 @@ export const TeamManager: React.FC = () => {
             className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl text-white space-y-4"
           >
             <h3 className="text-base font-bold pb-2 border-b border-slate-800">
-              {editingEmployee ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่เข้าทีม'}
+              {editingEmployee
+                ? isEmployeeOnlySelf
+                  ? 'แก้ไขข้อมูลส่วนตัว (วันที่เริ่มงาน / เบอร์โทร)'
+                  : 'แก้ไขข้อมูลพนักงาน'
+                : 'เพิ่มพนักงานใหม่เข้าทีม'}
             </h3>
+
+            {isEmployeeOnlySelf && (
+              <div className="bg-amber-950/60 border border-amber-700/80 rounded-xl p-3 text-xs text-amber-200 space-y-1">
+                <p className="font-bold flex items-center space-x-1">
+                  <span>ℹ️ สิทธิ์พนักงานส่วนตัว:</span>
+                </p>
+                <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                  คุณสามารถแก้ไขเฉพาะ <strong>"วันที่เริ่มงาน"</strong> และ <strong>"เบอร์โทรศัพท์"</strong> ของตนเองได้ ส่วนข้อมูลชื่อ-นามสกุล ตำแหน่ง และรหัสพนักงาน สามารถแก้ไขได้เฉพาะหัวหน้าแผนกหรือแอดมินเท่านั้น
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
@@ -253,9 +317,10 @@ export const TeamManager: React.FC = () => {
                 <input
                   type="text"
                   required
+                  disabled={isEmployeeOnlySelf}
                   value={employeeCode}
                   onChange={(e) => setEmployeeCode(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -266,10 +331,11 @@ export const TeamManager: React.FC = () => {
                 <input
                   type="text"
                   required
+                  disabled={isEmployeeOnlySelf}
                   placeholder="เช่น Boy, Kai, Beer"
                   value={codeName}
                   onChange={(e) => setCodeName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -280,10 +346,11 @@ export const TeamManager: React.FC = () => {
                 <input
                   type="text"
                   required
+                  disabled={isEmployeeOnlySelf}
                   placeholder="เช่น Siwapong Keawkuakool"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -294,9 +361,10 @@ export const TeamManager: React.FC = () => {
                 <input
                   type="text"
                   required
+                  disabled={isEmployeeOnlySelf}
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -308,11 +376,29 @@ export const TeamManager: React.FC = () => {
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
-              {isAdmin && (
+              <div className="col-span-2">
+                <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
+                  <span>📅 วันที่เริ่มงาน (Join Date):</span>
+                  {isEmployeeOnlySelf && (
+                    <span className="text-[10px] text-emerald-400 font-medium">
+                      ✓ พนักงานสามารถแก้ไขได้
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={joinDate}
+                  onChange={(e) => setJoinDate(e.target.value)}
+                  className="w-full bg-slate-800 border border-amber-500/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {isAdmin && !isEmployeeOnlySelf && (
                 <div className="col-span-2">
                   <label className="block text-amber-400 font-bold mb-1">
                     สังกัดแผนก (Department):
@@ -344,7 +430,7 @@ export const TeamManager: React.FC = () => {
                 type="submit"
                 className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-bold transition shadow-md"
               >
-                บันทึกพนักงาน
+                บันทึกข้อมูล
               </button>
             </div>
           </form>
