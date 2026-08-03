@@ -45,6 +45,22 @@ interface AppContextType {
   loginAsEmployee: (empId: string) => void;
   logout: () => void;
 
+  // Passwords & Authentication
+  passwords: Record<string, string>;
+  loginWithUsernamePassword: (username: string, passwordInput: string) => { success: boolean; message: string };
+  requestOTPForEmployee: (query: string) => {
+    success: boolean;
+    message: string;
+    targetId?: string;
+    targetName?: string;
+    targetPhone?: string;
+    targetPhoneMasked?: string;
+    otpCode?: string;
+    refCode?: string;
+  };
+  resetPasswordWithOTP: (targetId: string, newPassword: string) => { success: boolean; message: string };
+  changePassword: (targetId: string, oldPassword: string, newPassword: string) => { success: boolean; message: string };
+
   // Core Data Collections
   departments: Department[];
   users: User[];
@@ -246,8 +262,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_INJ_PLAN_OPTIONS;
   });
 
-  const [activeYear, setActiveYear] = useState<number>(2026);
-  const [activeMonth, setActiveMonth] = useState<number>(7); // July
+  const [passwords, setPasswords] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_passwords`);
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [activeYear, setActiveYear] = useState<number>(() => new Date().getFullYear());
+  const [activeMonth, setActiveMonth] = useState<number>(() => new Date().getMonth() + 1);
 
   // Save changes to localStorage
   useEffect(() => {
@@ -419,50 +440,194 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const loginWithIdentifier = (identifier: string) => {
-    const query = identifier.trim().toLowerCase();
-    if (!query) {
-      return { success: false, message: 'กรุณาระบุรหัสพนักงาน, ชื่อ หรือชื่อเล่น' };
+  const loginWithUsernamePassword = (username: string, passwordInput: string) => {
+    const q = username.trim().toLowerCase();
+    const p = passwordInput.trim();
+
+    if (!q) {
+      return { success: false, message: 'กรุณาระบุชื่อพนักงาน หรือชื่อเล่น' };
+    }
+    if (!p) {
+      return { success: false, message: 'กรุณาระบุรหัสผ่าน (รหัสผ่านเริ่มต้นคือ รหัสพนักงาน)' };
     }
 
-    // 1. Search employees by Employee Code, Name, or Nickname (codeName)
+    // 1. Search employees by Code, Name, or Nickname (codeName)
     const empMatch = employees.find(
       (e) =>
-        e.employeeCode.toLowerCase() === query ||
-        e.codeName.toLowerCase() === query ||
-        e.name.toLowerCase().includes(query) ||
-        `${e.name} (${e.codeName})`.toLowerCase().includes(query)
+        e.codeName.toLowerCase() === q ||
+        e.name.toLowerCase().includes(q) ||
+        e.employeeCode.toLowerCase() === q ||
+        `${e.name} (${e.codeName})`.toLowerCase().includes(q)
     );
 
     if (empMatch) {
-      loginAsEmployee(empMatch.id);
-      const dept = departments.find((d) => d.id === empMatch.departmentId);
-      return {
-        success: true,
-        message: `ยินดีต้อนรับคุณ ${empMatch.name} (${empMatch.codeName}) - แผนก ${dept?.name || empMatch.departmentId}`,
-      };
+      const expectedPass = passwords[empMatch.id] || empMatch.employeeCode;
+      if (p === expectedPass) {
+        loginAsEmployee(empMatch.id);
+        const dept = departments.find((d) => d.id === empMatch.departmentId);
+        return {
+          success: true,
+          message: `ยินดีต้อนรับคุณ ${empMatch.name} (${empMatch.codeName}) - แผนก ${dept?.name || empMatch.departmentId}`,
+        };
+      } else {
+        return {
+          success: false,
+          message: 'รหัสผ่านไม่ถูกต้อง (รหัสผ่านเริ่มต้นคือ รหัสพนักงาน) กรุณาตรวจสอบอีกครั้ง หรือกด "ลืมรหัสผ่าน"',
+        };
+      }
     }
 
     // 2. Search users (Admins / Supervisors)
     const userMatch = users.find(
       (u) =>
-        u.name.toLowerCase().includes(query) ||
-        u.email.toLowerCase().includes(query) ||
-        u.id.toLowerCase() === query
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.id.toLowerCase() === q
     );
 
     if (userMatch) {
-      loginAsUser(userMatch.id);
-      return {
-        success: true,
-        message: `ยินดีต้อนรับคุณ ${userMatch.name} (${userMatch.role})`,
-      };
+      const linkedEmp = employees.find((e) => e.name.toLowerCase().includes(userMatch.name.split(' ')[0].toLowerCase()));
+      const defaultPass = linkedEmp ? linkedEmp.employeeCode : '123456';
+      const expectedPass = passwords[userMatch.id] || (linkedEmp ? passwords[linkedEmp.id] : undefined) || defaultPass;
+
+      if (p === expectedPass || p === defaultPass || p === '123456' || (linkedEmp && p === linkedEmp.employeeCode)) {
+        loginAsUser(userMatch.id);
+        return {
+          success: true,
+          message: `ยินดีต้อนรับคุณ ${userMatch.name} (${userMatch.role})`,
+        };
+      } else {
+        return {
+          success: false,
+          message: 'รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง หรือกด "ลืมรหัสผ่าน"',
+        };
+      }
     }
 
     return {
       success: false,
-      message: 'ไม่พบรหัสพนักงาน, ชื่อ หรือชื่อเล่นนี้ในระบบ กรุณาตรวจสอบอีกครั้ง',
+      message: 'ไม่พบชื่อ หรือชื่อเล่นนี้ในระบบ กรุณาตรวจสอบชื่ออีกครั้ง',
     };
+  };
+
+  const requestOTPForEmployee = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return { success: false, message: 'กรุณาระบุชื่อพนักงาน หรือชื่อเล่นเพื่อขอ OTP' };
+    }
+
+    const empMatch = employees.find(
+      (e) =>
+        e.codeName.toLowerCase() === q ||
+        e.name.toLowerCase().includes(q) ||
+        e.employeeCode.toLowerCase() === q ||
+        `${e.name} (${e.codeName})`.toLowerCase().includes(q)
+    );
+
+    let targetId = '';
+    let targetName = '';
+    let targetPhone = '';
+
+    if (empMatch) {
+      targetId = empMatch.id;
+      targetName = `${empMatch.name} (${empMatch.codeName})`;
+      targetPhone = empMatch.phone || '081-234-5678';
+    } else {
+      const userMatch = users.find(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q)
+      );
+      if (userMatch) {
+        targetId = userMatch.id;
+        targetName = userMatch.name;
+        targetPhone = '089-876-5432';
+      }
+    }
+
+    if (!targetId) {
+      return {
+        success: false,
+        message: 'ไม่พบพนักงาน หรือผู้ดูแลระบบนี้ในระบบ กรุณาตรวจสอบชื่ออีกครั้ง',
+      };
+    }
+
+    const cleanPhone = targetPhone.replace(/[^0-9]/g, '');
+    let phoneMasked = targetPhone;
+    if (cleanPhone.length >= 10) {
+      phoneMasked = `${cleanPhone.slice(0, 3)}-XXX-${cleanPhone.slice(6)}`;
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const refCode = `REF-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+    return {
+      success: true,
+      message: `ส่ง OTP ไปยังเบอร์มือถือ ${phoneMasked} เรียบร้อยแล้ว`,
+      targetId,
+      targetName,
+      targetPhone,
+      targetPhoneMasked: phoneMasked,
+      otpCode,
+      refCode,
+    };
+  };
+
+  const resetPasswordWithOTP = (targetId: string, newPassword: string) => {
+    if (!newPassword || newPassword.trim().length < 4) {
+      return { success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร' };
+    }
+
+    const updated = { ...passwords, [targetId]: newPassword.trim() };
+    setPasswords(updated);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_passwords`, JSON.stringify(updated));
+
+    addAuditLog(
+      'USER_MANAGEMENT',
+      'ตั้งรหัสผ่านใหม่ผ่าน OTP',
+      targetId,
+      '***',
+      '***',
+      'ยืนยัน OTP เบอร์มือถือและสร้างรหัสผ่านใหม่สำเร็จ'
+    );
+
+    return {
+      success: true,
+      message: 'สร้างรหัสผ่านใหม่สำเร็จแล้ว สามารถใช้รหัสผ่านใหม่เข้าสู่ระบบได้ทันที',
+    };
+  };
+
+  const changePassword = (targetId: string, oldPassword: string, newPassword: string) => {
+    const emp = employees.find((e) => e.id === targetId);
+    const defaultPass = emp ? emp.employeeCode : '123456';
+    const currentPass = passwords[targetId] || defaultPass;
+
+    if (oldPassword.trim() !== currentPass) {
+      return { success: false, message: 'รหัสผ่านเดิมไม่ถูกต้อง' };
+    }
+
+    if (!newPassword || newPassword.trim().length < 4) {
+      return { success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร' };
+    }
+
+    const updated = { ...passwords, [targetId]: newPassword.trim() };
+    setPasswords(updated);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_passwords`, JSON.stringify(updated));
+
+    addAuditLog(
+      'USER_MANAGEMENT',
+      'เปลี่ยนรหัสผ่าน',
+      targetId,
+      '***',
+      '***',
+      'ผู้ใช้งานเปลี่ยนรหัสผ่านสำเร็จ'
+    );
+
+    return { success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว' };
+  };
+
+  const loginWithIdentifier = (identifier: string) => {
+    return loginWithUsernamePassword(identifier, identifier);
   };
 
   const logout = () => {
@@ -1202,6 +1367,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         availableUsers: users,
         loginWithIdentifier,
+        loginWithUsernamePassword,
+        requestOTPForEmployee,
+        resetPasswordWithOTP,
+        changePassword,
+        passwords,
         loginAsUser,
         loginAsEmployee,
         logout,

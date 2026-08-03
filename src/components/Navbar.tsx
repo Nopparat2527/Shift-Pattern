@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import {
   Calendar,
   Users,
@@ -17,6 +18,7 @@ import {
   Info,
   Sun,
   Moon,
+  KeyRound,
 } from 'lucide-react';
 
 export type NavTab =
@@ -51,6 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   } = useApp();
 
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Count pending requests
   const pendingSwapCount = swapRequests.filter((r) => r.status === 'PENDING').length;
@@ -105,6 +108,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 </div>
               </div>
 
+              {/* Change Password Button */}
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordOpen(true)}
+                className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition font-medium"
+                title="เปลี่ยนรหัสผ่าน"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">เปลี่ยนรหัสผ่าน</span>
+              </button>
+
               {/* Logout / Switch User Button */}
               <button
                 onClick={logout}
@@ -115,6 +129,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 <span>เข้าสู่ระบบ / สลับผู้ใช้</span>
               </button>
             </div>
+
+            <ChangePasswordModal
+              isOpen={isChangePasswordOpen}
+              onClose={() => setIsChangePasswordOpen(false)}
+            />
 
             {/* Dark / Light Theme Toggle */}
             <button

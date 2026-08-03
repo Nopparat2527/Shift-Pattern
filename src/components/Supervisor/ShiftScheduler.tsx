@@ -71,6 +71,7 @@ export const ShiftScheduler: React.FC = () => {
   const [activeFPBrush, setActiveFPBrush] = useState<string | null>(null);
   const [activeINJBrush, setActiveINJBrush] = useState<string | null>(null);
   const [activePaletteTab, setActivePaletteTab] = useState<'ALL' | 'SHIFT' | 'FP' | 'INJ'>('ALL');
+  const [isPaletteVisible, setIsPaletteVisible] = useState<boolean>(true);
 
   // Quick Batch Fill Modal state
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
@@ -441,14 +442,39 @@ export const ShiftScheduler: React.FC = () => {
 
         {/* Shift Codes & Production Plan Legend & Brush Palette */}
         <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
-          {/* Palette Category Header / Filter Tabs */}
+          {/* Palette Category Header / Filter Tabs / Toggle Visibility */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {isReadOnly
                   ? 'คำอธิบายสัญลักษณ์กะ & แผนการผลิต:'
                   : 'ตัวเลือกกะ & แผนการผลิต (คลิกเพื่อระบายสีลงตาราง):'}
               </span>
+
+              {/* Toggle Show/Hide Palette Button */}
+              <button
+                type="button"
+                onClick={() => setIsPaletteVisible((prev) => !prev)}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 border shadow-sm ${
+                  isPaletteVisible
+                    ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-indigo-500/20'
+                }`}
+                title={isPaletteVisible ? 'ซ่อนเมนูตัวเลือกกะเพื่อเพิ่มพื้นที่ดูตารางพนักงาน' : 'แสดงเมนูตัวเลือกกะ'}
+              >
+                {isPaletteVisible ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+                    <span>👁️‍🗨️ ซ่อนตัวเลือกกะ</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-white" />
+                    <span>👁️ แสดงตัวเลือกกะ</span>
+                  </>
+                )}
+              </button>
+
               {!isReadOnly && (
                 <button
                   type="button"
@@ -465,272 +491,279 @@ export const ShiftScheduler: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
-              <button
-                type="button"
-                onClick={() => setActivePaletteTab('ALL')}
-                className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
-                  activePaletteTab === 'ALL'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                🎨 ทั้งหมด
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePaletteTab('SHIFT')}
-                className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
-                  activePaletteTab === 'SHIFT'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                📋 กะพนักงาน
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePaletteTab('FP')}
-                className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
-                  activePaletteTab === 'FP'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                📦 แผน F&P
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePaletteTab('INJ')}
-                className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
-                  activePaletteTab === 'INJ'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                ⚙️ แผน INJ
-              </button>
-            </div>
+            {isPaletteVisible && (
+              <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setActivePaletteTab('ALL')}
+                  className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
+                    activePaletteTab === 'ALL'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  🎨 ทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePaletteTab('SHIFT')}
+                  className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
+                    activePaletteTab === 'SHIFT'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  📋 กะพนักงาน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePaletteTab('FP')}
+                  className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
+                    activePaletteTab === 'FP'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  📦 แผน F&P
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePaletteTab('INJ')}
+                  className={`px-2.5 py-0.5 rounded-lg font-semibold transition ${
+                    activePaletteTab === 'INJ'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  ⚙️ แผน INJ
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Active Brush Banner Notification */}
-          {!isReadOnly && (activePaintCode || activeFPBrush || activeINJBrush) && (
-            <div className="p-2.5 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-amber-500/10 border-2 border-indigo-500/40 dark:border-indigo-500/60 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-slate-800 dark:text-slate-100 font-bold shadow-sm">
-              <div className="flex items-center space-x-2">
-                <span className="text-base animate-bounce">🖌️</span>
-                <span>
-                  {activePaintCode && (
-                    <>
-                      โหมดระบายตารางกะพนักงาน <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-md font-extrabold">{activePaintCode}</span> — คลิกเซลล์พนักงานในตารางเพื่อระบายกะนี้
-                    </>
-                  )}
-                  {activeFPBrush && (
-                    <>
-                      โหมดระบายแผนผลิต F&P <span className="bg-sky-600 text-white px-2 py-0.5 rounded-md font-extrabold">{activeFPBrush}</span> — คลิกวันที่ในแถว F&P ด้านบนตารางเพื่อเปลี่ยนแผนทันที
-                    </>
-                  )}
-                  {activeINJBrush && (
-                    <>
-                      โหมดระบายแผนผลิต INJ <span className="bg-amber-600 text-slate-950 px-2 py-0.5 rounded-md font-extrabold">{activeINJBrush}</span> — คลิกวันที่ในแถว INJ ด้านบนตารางเพื่อเปลี่ยนแผนทันที
-                    </>
-                  )}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setActivePaintCode(null);
-                  setActiveFPBrush(null);
-                  setActiveINJBrush(null);
-                }}
-                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-sm"
-              >
-                ✕ ยกเลิกโหมดระบายสี
-              </button>
-            </div>
-          )}
+          {/* Collapsible Palette Items */}
+          {isPaletteVisible && (
+            <div className="space-y-3 pt-1 animate-in fade-in duration-200">
+              {/* Active Brush Banner Notification */}
+              {!isReadOnly && (activePaintCode || activeFPBrush || activeINJBrush) && (
+                <div className="p-2.5 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-amber-500/10 border-2 border-indigo-500/40 dark:border-indigo-500/60 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-slate-800 dark:text-slate-100 font-bold shadow-sm">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base animate-bounce">🖌️</span>
+                    <span>
+                      {activePaintCode && (
+                        <>
+                          โหมดระบายตารางกะพนักงาน <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-md font-extrabold">{activePaintCode}</span> — คลิกเซลล์พนักงานในตารางเพื่อระบายกะนี้
+                        </>
+                      )}
+                      {activeFPBrush && (
+                        <>
+                          โหมดระบายแผนผลิต F&P <span className="bg-sky-600 text-white px-2 py-0.5 rounded-md font-extrabold">{activeFPBrush}</span> — คลิกวันที่ในแถว F&P ด้านบนตารางเพื่อเปลี่ยนแผนทันที
+                        </>
+                      )}
+                      {activeINJBrush && (
+                        <>
+                          โหมดระบายแผนผลิต INJ <span className="bg-amber-600 text-slate-950 px-2 py-0.5 rounded-md font-extrabold">{activeINJBrush}</span> — คลิกวันที่ในแถว INJ ด้านบนตารางเพื่อเปลี่ยนแผนทันที
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePaintCode(null);
+                      setActiveFPBrush(null);
+                      setActiveINJBrush(null);
+                    }}
+                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                  >
+                    ✕ ยกเลิกโหมดระบายสี
+                  </button>
+                </div>
+              )}
 
-          {/* Group 1: Shift Codes Palette */}
-          {(activePaletteTab === 'ALL' || activePaletteTab === 'SHIFT') && (
-            <div className="bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-              <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                <span className="flex items-center space-x-1.5">
-                  <span>📋 สัญลักษณ์กะการทำงาน (Shift Codes):</span>
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOptionManagerDefaultTab('SHIFT');
-                        setIsOptionManagerOpen(true);
-                      }}
-                      className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline ml-1 font-semibold"
-                    >
-                      (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
-                    </button>
-                  )}
-                </span>
-                {activePaintCode && (
-                  <span className="text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px]">กำลังเลือก: {activePaintCode}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {shiftTypes.map((type) => {
-                  const isSelected = !isReadOnly && activePaintCode === type.code;
-                  return (
-                    <button
-                      key={type.code}
-                      disabled={isReadOnly}
-                      onClick={() => {
-                        if (!isReadOnly) {
-                          setActiveFPBrush(null);
-                          setActiveINJBrush(null);
-                          setActivePaintCode(isSelected ? null : type.code);
-                        }
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition flex items-center space-x-1.5 ${
-                        type.colorBg
-                      } ${type.colorText} ${type.colorBorder} ${
-                        isReadOnly
-                          ? 'cursor-default'
-                          : isSelected
-                          ? 'ring-2 ring-indigo-500 shadow-md scale-105 font-black'
-                          : 'hover:opacity-90'
-                      }`}
-                      title={`${type.nameTh}: ${type.description}`}
-                    >
-                      <span className="font-bold">{type.code}</span>
-                      <span className="text-[11px] opacity-90">{type.nameTh}</span>
-                      {isSelected && <CheckCircle2 className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              {/* Group 1: Shift Codes Palette */}
+              {(activePaletteTab === 'ALL' || activePaletteTab === 'SHIFT') && (
+                <div className="bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <span>📋 สัญลักษณ์กะการทำงาน (Shift Codes):</span>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOptionManagerDefaultTab('SHIFT');
+                            setIsOptionManagerOpen(true);
+                          }}
+                          className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline ml-1 font-semibold"
+                        >
+                          (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
+                        </button>
+                      )}
+                    </span>
+                    {activePaintCode && (
+                      <span className="text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px]">กำลังเลือก: {activePaintCode}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {shiftTypes.map((type) => {
+                      const isSelected = !isReadOnly && activePaintCode === type.code;
+                      return (
+                        <button
+                          key={type.code}
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            if (!isReadOnly) {
+                              setActiveFPBrush(null);
+                              setActiveINJBrush(null);
+                              setActivePaintCode(isSelected ? null : type.code);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition flex items-center space-x-1.5 ${
+                            type.colorBg
+                          } ${type.colorText} ${type.colorBorder} ${
+                            isReadOnly
+                              ? 'cursor-default'
+                              : isSelected
+                              ? 'ring-2 ring-indigo-500 shadow-md scale-105 font-black'
+                              : 'hover:opacity-90'
+                          }`}
+                          title={`${type.nameTh}: ${type.description}`}
+                        >
+                          <span className="font-bold">{type.code}</span>
+                          <span className="text-[11px] opacity-90">{type.nameTh}</span>
+                          {isSelected && <CheckCircle2 className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-          {/* Group 2: F&P Production Plan Options Palette */}
-          {(activePaletteTab === 'ALL' || activePaletteTab === 'FP') && (
-            <div className="bg-sky-50/50 dark:bg-sky-950/20 p-2.5 rounded-xl border border-sky-200/80 dark:border-sky-900/50 space-y-1.5">
-              <div className="text-[11px] font-bold text-sky-900 dark:text-sky-200 flex items-center justify-between">
-                <span className="flex items-center space-x-1.5">
-                  <span>📦 แผนผลิต F&P (Fill & Pack Options):</span>
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOptionManagerDefaultTab('FP');
-                        setIsOptionManagerOpen(true);
-                      }}
-                      className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline ml-1 font-semibold"
-                    >
-                      (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
-                    </button>
-                  )}
-                </span>
-                {activeFPBrush && (
-                  <span className="text-sky-600 dark:text-sky-400 font-extrabold text-[10px]">กำลังเลือก: {activeFPBrush}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  ...fpPlanOptions.map((opt) => ({
-                    value: opt.code,
-                    style: `${opt.colorBg} ${opt.colorText} ${opt.colorBorder}`,
-                  })),
-                  { value: '-', style: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
-                ].map((opt) => {
-                  const isSelected = !isReadOnly && activeFPBrush === opt.value;
-                  return (
-                    <button
-                      key={`fp-opt-${opt.value}`}
-                      disabled={isReadOnly}
-                      onClick={() => {
-                        if (!isReadOnly) {
-                          setActivePaintCode(null);
-                          setActiveINJBrush(null);
-                          setActiveFPBrush(isSelected ? null : opt.value);
-                        }
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
-                        opt.style
-                      } ${
-                        isReadOnly
-                          ? 'cursor-default'
-                          : isSelected
-                          ? 'ring-2 ring-sky-500 shadow-md scale-105 font-black'
-                          : 'hover:opacity-90'
-                      }`}
-                      title={`คลิกเลือกแปรงแผน F&P: ${opt.value}`}
-                    >
-                      <span>{opt.value === '-' ? '- ล้างค่า' : opt.value}</span>
-                      {isSelected && <CheckCircle2 className="w-3 h-3 text-sky-600 dark:text-sky-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              {/* Group 2: F&P Production Plan Options Palette */}
+              {(activePaletteTab === 'ALL' || activePaletteTab === 'FP') && (
+                <div className="bg-sky-50/50 dark:bg-sky-950/20 p-2.5 rounded-xl border border-sky-200/80 dark:border-sky-900/50 space-y-1.5">
+                  <div className="text-[11px] font-bold text-sky-900 dark:text-sky-200 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <span>📦 แผนผลิต F&P (Fill & Pack Options):</span>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOptionManagerDefaultTab('FP');
+                            setIsOptionManagerOpen(true);
+                          }}
+                          className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline ml-1 font-semibold"
+                        >
+                          (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
+                        </button>
+                      )}
+                    </span>
+                    {activeFPBrush && (
+                      <span className="text-sky-600 dark:text-sky-400 font-extrabold text-[10px]">กำลังเลือก: {activeFPBrush}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      ...fpPlanOptions.map((opt) => ({
+                        value: opt.code,
+                        style: `${opt.colorBg} ${opt.colorText} ${opt.colorBorder}`,
+                      })),
+                      { value: '-', style: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
+                    ].map((opt) => {
+                      const isSelected = !isReadOnly && activeFPBrush === opt.value;
+                      return (
+                        <button
+                          key={`fp-opt-${opt.value}`}
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            if (!isReadOnly) {
+                              setActivePaintCode(null);
+                              setActiveINJBrush(null);
+                              setActiveFPBrush(isSelected ? null : opt.value);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
+                            opt.style
+                          } ${
+                            isReadOnly
+                              ? 'cursor-default'
+                              : isSelected
+                              ? 'ring-2 ring-sky-500 shadow-md scale-105 font-black'
+                              : 'hover:opacity-90'
+                          }`}
+                          title={`คลิกเลือกแปรงแผน F&P: ${opt.value}`}
+                        >
+                          <span>{opt.value === '-' ? '- ล้างค่า' : opt.value}</span>
+                          {isSelected && <CheckCircle2 className="w-3 h-3 text-sky-600 dark:text-sky-400" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-          {/* Group 3: INJ Production Plan Options Palette */}
-          {(activePaletteTab === 'ALL' || activePaletteTab === 'INJ') && (
-            <div className="bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-xl border border-amber-200/80 dark:border-amber-900/50 space-y-1.5">
-              <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                <span className="flex items-center space-x-1.5">
-                  <span>⚙️ แผนผลิต INJ (Injection Options):</span>
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOptionManagerDefaultTab('INJ');
-                        setIsOptionManagerOpen(true);
-                      }}
-                      className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline ml-1 font-semibold"
-                    >
-                      (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
-                    </button>
-                  )}
-                </span>
-                {activeINJBrush && (
-                  <span className="text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">กำลังเลือก: {activeINJBrush}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  ...injPlanOptions.map((opt) => ({
-                    value: opt.code,
-                    style: `${opt.colorBg} ${opt.colorText} ${opt.colorBorder}`,
-                  })),
-                  { value: '-', style: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
-                ].map((opt) => {
-                  const isSelected = !isReadOnly && activeINJBrush === opt.value;
-                  return (
-                    <button
-                      key={`inj-opt-${opt.value}`}
-                      disabled={isReadOnly}
-                      onClick={() => {
-                        if (!isReadOnly) {
-                          setActivePaintCode(null);
-                          setActiveFPBrush(null);
-                          setActiveINJBrush(isSelected ? null : opt.value);
-                        }
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
-                        opt.style
-                      } ${
-                        isReadOnly
-                          ? 'cursor-default'
-                          : isSelected
-                          ? 'ring-2 ring-amber-500 shadow-md scale-105 font-black'
-                          : 'hover:opacity-90'
-                      }`}
-                      title={`คลิกเลือกแปรงแผน INJ: ${opt.value}`}
-                    >
-                      <span>{opt.value === '-' ? '- ล้างค่า' : opt.value}</span>
-                      {isSelected && <CheckCircle2 className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Group 3: INJ Production Plan Options Palette */}
+              {(activePaletteTab === 'ALL' || activePaletteTab === 'INJ') && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-xl border border-amber-200/80 dark:border-amber-900/50 space-y-1.5">
+                  <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <span>⚙️ แผนผลิต INJ (Injection Options):</span>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOptionManagerDefaultTab('INJ');
+                            setIsOptionManagerOpen(true);
+                          }}
+                          className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline ml-1 font-semibold"
+                        >
+                          (✏️ แก้ไข/เพิ่ม/ลบ/เปลี่ยนสี)
+                        </button>
+                      )}
+                    </span>
+                    {activeINJBrush && (
+                      <span className="text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">กำลังเลือก: {activeINJBrush}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      ...injPlanOptions.map((opt) => ({
+                        value: opt.code,
+                        style: `${opt.colorBg} ${opt.colorText} ${opt.colorBorder}`,
+                      })),
+                      { value: '-', style: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
+                    ].map((opt) => {
+                      const isSelected = !isReadOnly && activeINJBrush === opt.value;
+                      return (
+                        <button
+                          key={`inj-opt-${opt.value}`}
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            if (!isReadOnly) {
+                              setActivePaintCode(null);
+                              setActiveFPBrush(null);
+                              setActiveINJBrush(isSelected ? null : opt.value);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
+                            opt.style
+                          } ${
+                            isReadOnly
+                              ? 'cursor-default'
+                              : isSelected
+                              ? 'ring-2 ring-amber-500 shadow-md scale-105 font-black'
+                              : 'hover:opacity-90'
+                          }`}
+                          title={`คลิกเลือกแปรงแผน INJ: ${opt.value}`}
+                        >
+                          <span>{opt.value === '-' ? '- ล้างค่า' : opt.value}</span>
+                          {isSelected && <CheckCircle2 className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -821,7 +854,7 @@ export const ShiftScheduler: React.FC = () => {
                     : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300';
 
                   const isFPBrushActive = !!activeFPBrush;
-                  const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                  const isWeekEnd = d.isSaturday;
                   const borderRightClass = isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
@@ -883,7 +916,7 @@ export const ShiftScheduler: React.FC = () => {
                     : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300';
 
                   const isINJBrushActive = !!activeINJBrush;
-                  const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                  const isWeekEnd = d.isSaturday;
                   const borderRightClass = isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
@@ -931,7 +964,7 @@ export const ShiftScheduler: React.FC = () => {
                 {monthDays.map((d, idx) => {
                   // Only show week label when week changes or first day
                   const isNewWeek = idx === 0 || monthDays[idx - 1].weekNumber !== d.weekNumber;
-                  const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                  const isWeekEnd = d.isSaturday;
                   const borderRightClass = isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
@@ -943,7 +976,7 @@ export const ShiftScheduler: React.FC = () => {
                       key={`week-${d.dateStr}`}
                       className={`p-1 text-center font-bold text-[10px] ${borderRightClass} min-w-[38px] ${weekBg}`}
                     >
-                      {isNewWeek ? `W${d.weekNumber}` : ''}
+                      W{d.weekNumber}
                     </th>
                   );
                 })}
@@ -959,7 +992,7 @@ export const ShiftScheduler: React.FC = () => {
                   วันที่ (Date)
                 </th>
                 {monthDays.map((d, idx) => {
-                  const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                  const isWeekEnd = d.isSaturday;
                   const borderRightClass = isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
@@ -999,7 +1032,7 @@ export const ShiftScheduler: React.FC = () => {
                   </th>
                 )}
                 {monthDays.map((d, idx) => {
-                  const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                  const isWeekEnd = d.isSaturday;
                   const borderRightClass = isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
@@ -1067,7 +1100,7 @@ export const ShiftScheduler: React.FC = () => {
                           colorBorder: 'border-slate-300',
                         };
 
-                        const isWeekEnd = d.isSunday || (idx < monthDays.length - 1 && monthDays[idx + 1].weekNumber !== d.weekNumber);
+                        const isWeekEnd = d.isSaturday;
                         const borderRightClass = isWeekEnd
                           ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                           : 'border-r border-slate-200 dark:border-slate-800';
