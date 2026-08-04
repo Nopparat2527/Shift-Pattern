@@ -24,8 +24,10 @@ export const UserManager: React.FC = () => {
     users,
     departments,
     addUser,
+    updateUser,
     updateUserRole,
     deleteUser,
+    resetPasswordToEmployeeCode,
     addDepartment,
     updateDepartment,
     deleteDepartment,
@@ -36,6 +38,8 @@ export const UserManager: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('SUPERVISOR');
   const [departmentId, setDepartmentId] = useState('');
   const [position, setPosition] = useState('');
@@ -59,6 +63,8 @@ export const UserManager: React.FC = () => {
       setEditingUser(userToEdit);
       setName(userToEdit.name);
       setEmail(userToEdit.email);
+      setEmployeeCode(userToEdit.employeeCode || '');
+      setPhone(userToEdit.phone || '');
       setRole(userToEdit.role);
       setDepartmentId(userToEdit.departmentId || departments[0]?.id || '');
       setPosition(userToEdit.position || '');
@@ -66,6 +72,8 @@ export const UserManager: React.FC = () => {
       setEditingUser(null);
       setName('');
       setEmail('');
+      setEmployeeCode('');
+      setPhone('');
       setRole('SUPERVISOR');
       setDepartmentId(departments[0]?.id || '');
       setPosition('หัวหน้าแผนก (Supervisor)');
@@ -78,20 +86,32 @@ export const UserManager: React.FC = () => {
     if (!name || !email) return;
 
     if (editingUser) {
-      updateUserRole(editingUser.id, role, role === 'SUPERVISOR' ? departmentId : undefined);
-    } else {
-      addUser({
-        name,
-        email,
+      updateUser(editingUser.id, {
+        name: name.trim(),
+        email: email.trim(),
+        employeeCode: employeeCode.trim(),
+        phone: phone.trim(),
         role,
         departmentId: role === 'SUPERVISOR' ? departmentId : undefined,
-        position: position || (role === 'ADMIN' ? 'System Admin' : 'Supervisor'),
+        position: position.trim() || (role === 'ADMIN' ? 'System Admin' : 'Supervisor'),
+      });
+    } else {
+      addUser({
+        name: name.trim(),
+        email: email.trim(),
+        employeeCode: employeeCode.trim(),
+        phone: phone.trim(),
+        role,
+        departmentId: role === 'SUPERVISOR' ? departmentId : undefined,
+        position: position.trim() || (role === 'ADMIN' ? 'System Admin' : 'Supervisor'),
       });
     }
 
     setIsModalOpen(false);
     setName('');
     setEmail('');
+    setEmployeeCode('');
+    setPhone('');
   };
 
   // Add new department handler inside quick modal
@@ -187,6 +207,7 @@ export const UserManager: React.FC = () => {
             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3">ชื่อ-นามสกุล / ตำแหน่ง</th>
+                <th className="p-3">รหัสพนักงาน / เบอร์โทร</th>
                 <th className="p-3">อีเมล</th>
                 <th className="p-3">ระดับสิทธิ์ (Role)</th>
                 <th className="p-3">แผนกที่สังกัด</th>
@@ -202,6 +223,15 @@ export const UserManager: React.FC = () => {
                     <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">
                       <div>{u.name}</div>
                       <div className="text-[11px] font-normal text-slate-400">{u.position}</div>
+                    </td>
+
+                    <td className="p-3 text-slate-700 dark:text-slate-300">
+                      <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        {u.employeeCode ? `🆔 ${u.employeeCode}` : <span className="text-slate-400 font-normal">-</span>}
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        {u.phone ? `📞 ${u.phone}` : <span className="text-slate-400 font-normal">ไม่มีเบอร์โทร</span>}
+                      </div>
                     </td>
 
                     <td className="p-3 text-slate-600 dark:text-slate-400 font-mono">
@@ -239,6 +269,21 @@ export const UserManager: React.FC = () => {
                     </td>
 
                     <td className="p-3 text-right space-x-1.5">
+                      <button
+                        onClick={() => {
+                          const empCode = u.employeeCode || '123456';
+                          if (confirm(`คุณต้องการรีเซ็ตรหัสผ่านของ ${u.name} กลับเป็นรหัสพนักงาน (${empCode}) ใช่หรือไม่?`)) {
+                            const res = resetPasswordToEmployeeCode(u.id);
+                            alert(res.message);
+                          }
+                        }}
+                        className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 text-[11px] font-bold px-2 py-1 rounded-lg transition"
+                        title="รีเซ็ตรหัสผ่านกลับเป็นรหัสพนักงาน"
+                      >
+                        <Key className="w-3 h-3 inline mr-1" />
+                        รีเซ็ตรหัส
+                      </button>
+
                       <button
                         onClick={() => handleOpenUserModal(u)}
                         className="bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 text-[11px] font-bold px-2.5 py-1 rounded-lg transition"
@@ -311,6 +356,30 @@ export const UserManager: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">รหัสพนักงาน:</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 0756208 หรือ ADM-001"
+                    value={employeeCode}
+                    onChange={(e) => setEmployeeCode(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">เบอร์โทรศัพท์:</label>
+                  <input
+                    type="tel"
+                    placeholder="เช่น 081-234-5678"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                  />
+                </div>
               </div>
 
               <div>

@@ -8,6 +8,8 @@ export interface User {
   departmentId?: string; // Assigned department for Supervisors / Employees
   avatarUrl?: string;
   position: string;
+  employeeCode?: string; // รหัสพนักงาน
+  phone?: string; // เบอร์โทรศัพท์
 }
 
 export interface Department {

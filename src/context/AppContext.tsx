@@ -59,6 +59,17 @@ interface AppContextType {
     refCode?: string;
   };
   resetPasswordWithOTP: (targetId: string, newPassword: string) => { success: boolean; message: string };
+  requestAdminResetPassword: (query: string) => {
+    success: boolean;
+    message: string;
+    targetId?: string;
+    targetName?: string;
+  };
+  resetPasswordToEmployeeCode: (targetId: string) => {
+    success: boolean;
+    message: string;
+    defaultPassword?: string;
+  };
   changePassword: (targetId: string, oldPassword: string, newPassword: string) => { success: boolean; message: string };
 
   // Core Data Collections
@@ -123,6 +134,7 @@ interface AppContextType {
   // User Management (Admin)
   addUser: (user: Omit<User, 'id'>) => void;
   updateUserRole: (userId: string, newRole: UserRole, departmentId?: string) => void;
+  updateUser: (userId: string, updateData: Partial<User>) => void;
   deleteUser: (userId: string) => void;
 
   // Company Holiday Management (Admin)
@@ -484,6 +496,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (u) =>
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
+        (u.employeeCode && u.employeeCode.toLowerCase() === q) ||
+        (u.phone && u.phone.includes(q)) ||
         u.id.toLowerCase() === q
     );
 
@@ -596,6 +610,91 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       success: true,
       message: 'สร้างรหัสผ่านใหม่สำเร็จแล้ว สามารถใช้รหัสผ่านใหม่เข้าสู่ระบบได้ทันที',
+    };
+  };
+
+  const requestAdminResetPassword = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return { success: false, message: 'กรุณาระบุชื่อพนักงาน หรือรหัสพนักงาน' };
+    }
+
+    const empMatch = employees.find(
+      (e) =>
+        e.codeName.toLowerCase() === q ||
+        e.name.toLowerCase().includes(q) ||
+        e.employeeCode.toLowerCase() === q ||
+        `${e.name} (${e.codeName})`.toLowerCase().includes(q)
+    );
+
+    const userMatch = users.find(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.employeeCode && u.employeeCode.toLowerCase() === q)
+    );
+
+    const targetName = empMatch
+      ? `${empMatch.name} (${empMatch.codeName})`
+      : userMatch
+      ? userMatch.name
+      : null;
+
+    const targetId = empMatch?.id || userMatch?.id || null;
+    const empCode = empMatch?.employeeCode || userMatch?.employeeCode || 'รหัสพนักงาน';
+
+    if (!targetName || !targetId) {
+      return {
+        success: false,
+        message: 'ไม่พบข้อมูลพนักงานในระบบ กรุณาตรวจสอบชื่อ หรือรหัสพนักงานอีกครั้ง',
+      };
+    }
+
+    addAuditLog(
+      'USER_MANAGEMENT',
+      'แจ้งแอดมินขอรีเซ็ตรหัสผ่าน',
+      targetName,
+      'ลืมรหัสผ่าน',
+      `รหัสพนักงาน: ${empCode}`,
+      `พนักงาน ${targetName} ส่งคำขอแจ้งแอดมินเพื่อขอรีเซ็ตรหัสผ่านกลับเป็นรหัสพนักงาน`
+    );
+
+    return {
+      success: true,
+      message: `บันทึกคำขอแจ้งแอดมินเรียบร้อยแล้ว! แอดมินสามารถรีเซ็ตรหัสผ่านของคุณ (${targetName}) กลับเป็นรหัสพนักงาน (${empCode}) ได้ทันที`,
+      targetId,
+      targetName,
+    };
+  };
+
+  const resetPasswordToEmployeeCode = (targetId: string) => {
+    const emp = employees.find((e) => e.id === targetId || e.employeeCode === targetId);
+    const user = users.find((u) => u.id === targetId || u.employeeCode === targetId);
+
+    const code = emp?.employeeCode || user?.employeeCode || '123456';
+    const name = emp?.name || user?.name || targetId;
+
+    const updated = { ...passwords };
+    if (emp) delete updated[emp.id];
+    if (user) delete updated[user.id];
+    delete updated[targetId];
+
+    setPasswords(updated);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_passwords`, JSON.stringify(updated));
+
+    addAuditLog(
+      'USER_MANAGEMENT',
+      'รีเซ็ตรหัสผ่านเป็นรหัสพนักงาน',
+      name,
+      '***',
+      code,
+      `ทำการรีเซ็ตรหัสผ่านของคุณ ${name} กลับเป็นรหัสพนักงาน (${code}) เรียบร้อยแล้ว`
+    );
+
+    return {
+      success: true,
+      message: `รีเซ็ตรหัสผ่านของคุณ ${name} กลับเป็นรหัสพนักงาน (${code}) เรียบร้อยแล้ว!`,
+      defaultPassword: code,
     };
   };
 
@@ -788,6 +887,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetUser.name,
       oldRoleInfo,
       newRoleInfo
+    );
+  };
+
+  const updateUser = (userId: string, updateData: Partial<User>) => {
+    const targetUser = users.find((u) => u.id === userId);
+    if (!targetUser) return;
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              ...updateData,
+              departmentId: updateData.role === 'SUPERVISOR' ? updateData.departmentId : (updateData.role === 'ADMIN' ? undefined : (updateData.departmentId !== undefined ? updateData.departmentId : u.departmentId)),
+            }
+          : u
+      )
+    );
+
+    if (currentUser.id === userId) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        ...updateData,
+      }));
+    }
+
+    if (updateData.employeeCode || updateData.phone || updateData.name) {
+      setEmployees((prev) =>
+        prev.map((emp) => {
+          if (
+            (targetUser.employeeCode && emp.employeeCode === targetUser.employeeCode) ||
+            (updateData.employeeCode && emp.employeeCode === updateData.employeeCode) ||
+            emp.name === targetUser.name
+          ) {
+            return {
+              ...emp,
+              ...(updateData.name ? { name: updateData.name } : {}),
+              ...(updateData.phone ? { phone: updateData.phone } : {}),
+              ...(updateData.employeeCode ? { employeeCode: updateData.employeeCode } : {}),
+            };
+          }
+          return emp;
+        })
+      );
+    }
+
+    addAuditLog(
+      'USER_MANAGEMENT',
+      'แก้ไขข้อมูลผู้ใช้งาน',
+      targetUser.name,
+      `สิทธิ์: ${targetUser.role}, อีเมล: ${targetUser.email}`,
+      `สิทธิ์: ${updateData.role || targetUser.role}, อีเมล: ${updateData.email || targetUser.email}, รหัส: ${updateData.employeeCode || targetUser.employeeCode || '-'}`
     );
   };
 
@@ -1405,6 +1556,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithUsernamePassword,
         requestOTPForEmployee,
         resetPasswordWithOTP,
+        requestAdminResetPassword,
+        resetPasswordToEmployeeCode,
         changePassword,
         passwords,
         loginAsUser,
@@ -1459,6 +1612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         addUser,
         updateUserRole,
+        updateUser,
         deleteUser,
 
         addHoliday,

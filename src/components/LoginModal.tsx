@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   ShieldCheck,
+  ShieldAlert,
   Sun,
   Moon,
   Lock,
@@ -15,6 +16,7 @@ import {
   KeyRound,
   MessageSquare,
   RefreshCw,
+  RotateCcw,
   ArrowLeft,
   Sparkles,
 } from 'lucide-react';
@@ -24,12 +26,12 @@ export const LoginModal: React.FC = () => {
     theme,
     toggleTheme,
     loginWithUsernamePassword,
-    requestOTPForEmployee,
-    resetPasswordWithOTP,
+    requestAdminResetPassword,
+    resetPasswordToEmployeeCode,
   } = useApp();
 
-  // Mode: 'LOGIN' | 'FORGOT_REQUEST_OTP' | 'FORGOT_VERIFY_OTP'
-  const [mode, setMode] = useState<'LOGIN' | 'FORGOT_REQUEST_OTP' | 'FORGOT_VERIFY_OTP'>('LOGIN');
+  // Mode: 'LOGIN' | 'FORGOT_PASSWORD'
+  const [mode, setMode] = useState<'LOGIN' | 'FORGOT_PASSWORD'>('LOGIN');
 
   // Login Form States
   const [usernameInput, setUsernameInput] = useState('');
@@ -38,42 +40,13 @@ export const LoginModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Forgot Password / OTP States
+  // Forgot Password States
   const [forgotUsername, setForgotUsername] = useState('');
-  const [otpTargetData, setOtpTargetData] = useState<{
+  const [requestResult, setRequestResult] = useState<{
     targetId: string;
     targetName: string;
-    targetPhone: string;
-    targetPhoneMasked: string;
-    otpCode: string;
-    refCode: string;
+    message: string;
   } | null>(null);
-
-  const [enteredOtp, setEnteredOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [timerCount, setTimerCount] = useState(60);
-  const [canResendOtp, setCanResendOtp] = useState(false);
-
-  // Countdown timer for OTP
-  useEffect(() => {
-    let interval: any = null;
-    if (mode === 'FORGOT_VERIFY_OTP' && timerCount > 0) {
-      interval = setInterval(() => {
-        setTimerCount((prev) => {
-          if (prev <= 1) {
-            setCanResendOtp(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [mode, timerCount]);
 
   // Handle Login Submit
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -96,84 +69,39 @@ export const LoginModal: React.FC = () => {
     }
   };
 
-  // Handle Request OTP
-  const handleRequestOTP = (e?: React.FormEvent) => {
+  // Handle Request Admin Reset
+  const handleRequestAdminReset = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
 
     const targetQuery = forgotUsername.trim() || usernameInput.trim();
     if (!targetQuery) {
-      setErrorMessage('กรุณาระบุชื่อพนักงาน หรือชื่อเล่นเพื่อขอ OTP');
+      setErrorMessage('กรุณาระบุชื่อพนักงาน หรือรหัสพนักงาน');
       return;
     }
 
-    const res = requestOTPForEmployee(targetQuery);
+    const res = requestAdminResetPassword(targetQuery);
     if (!res.success) {
       setErrorMessage(res.message);
-    } else if (res.targetId && res.otpCode) {
-      setOtpTargetData({
+    } else if (res.targetId && res.targetName) {
+      setRequestResult({
         targetId: res.targetId,
-        targetName: res.targetName || '',
-        targetPhone: res.targetPhone || '',
-        targetPhoneMasked: res.targetPhoneMasked || '',
-        otpCode: res.otpCode,
-        refCode: res.refCode || 'REF-A01',
+        targetName: res.targetName,
+        message: res.message,
       });
-      setMode('FORGOT_VERIFY_OTP');
-      setTimerCount(60);
-      setCanResendOtp(false);
-      setEnteredOtp('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setErrorMessage('');
+      setSuccessMessage(res.message);
     }
   };
 
-  // Handle Resend OTP
-  const handleResendOTP = () => {
-    if (!otpTargetData) return;
-    handleRequestOTP();
-  };
-
-  // Handle Reset Password Submit
-  const handleResetPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    if (!otpTargetData) return;
-
-    if (!enteredOtp.trim()) {
-      setErrorMessage('กรุณาระบุรหัส OTP 6 หลัก');
-      return;
-    }
-
-    if (enteredOtp.trim() !== otpTargetData.otpCode) {
-      setErrorMessage('รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบจาก SMS จำลอง หรือกดขอ OTP อีกครั้ง');
-      return;
-    }
-
-    if (!newPassword.trim()) {
-      setErrorMessage('กรุณาระบุรหัสผ่านใหม่');
-      return;
-    }
-
-    if (newPassword.trim().length < 4) {
-      setErrorMessage('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrorMessage('รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน');
-      return;
-    }
-
-    const res = resetPasswordWithOTP(otpTargetData.targetId, newPassword);
-    if (!res.success) {
-      setErrorMessage(res.message);
-    } else {
-      setSuccessMessage('สร้างรหัสผ่านใหม่สำเร็จแล้ว! กรุณาใช้รหัสผ่านใหม่เข้าสู่ระบบ');
+  // Handle Instant Direct Reset to Employee Code
+  const handleDirectResetToEmpCode = () => {
+    if (!requestResult?.targetId) return;
+    const res = resetPasswordToEmployeeCode(requestResult.targetId);
+    if (res.success) {
+      setSuccessMessage(`รีเซ็ตรหัสผ่านของคุณ ${requestResult.targetName} กลับเป็นรหัสพนักงาน (${res.defaultPassword}) เรียบร้อยแล้ว! สามารถใช้รหัสพนักงานนี้เข้าสู่ระบบได้ทันที`);
+      setPasswordInput(res.defaultPassword || '');
       setMode('LOGIN');
-      setPasswordInput(newPassword);
       setErrorMessage('');
     }
   };
@@ -278,12 +206,13 @@ export const LoginModal: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setForgotUsername(usernameInput);
-                      setMode('FORGOT_REQUEST_OTP');
+                      setMode('FORGOT_PASSWORD');
                       setErrorMessage('');
+                      setSuccessMessage('');
                     }}
                     className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
                   >
-                    ลืมรหัสผ่าน? (ขอ OTP)
+                    ลืมรหัสผ่าน? (แจ้งแอดมิน)
                   </button>
                 </div>
 
@@ -325,14 +254,14 @@ export const LoginModal: React.FC = () => {
             </form>
           )}
 
-          {/* MODE 2: Request OTP Step */}
-          {mode === 'FORGOT_REQUEST_OTP' && (
+          {/* MODE: Forgot Password - Notify Admin to Reset back to Employee Code */}
+          {mode === 'FORGOT_PASSWORD' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center space-x-2">
-                  <Phone className="w-5 h-5 text-indigo-500" />
+                  <ShieldAlert className="w-5 h-5 text-indigo-500" />
                   <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                    ขอรหัส OTP ทางเบอร์มือถือ
+                    แจ้งแอดมินรีเซ็ตรหัสผ่านเป็นรหัสพนักงาน
                   </h2>
                 </div>
                 <button
@@ -340,6 +269,7 @@ export const LoginModal: React.FC = () => {
                   onClick={() => {
                     setMode('LOGIN');
                     setErrorMessage('');
+                    setSuccessMessage('');
                   }}
                   className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium flex items-center space-x-1"
                 >
@@ -348,172 +278,54 @@ export const LoginModal: React.FC = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleRequestOTP} className="space-y-4">
+              {/* Policy Banner */}
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/80 rounded-2xl text-xs space-y-1.5 text-amber-900 dark:text-amber-200">
+                <div className="font-bold flex items-center space-x-1.5 text-amber-800 dark:text-amber-300">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>นโยบายความปลอดภัยการรีเซ็ตรหัสผ่าน</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  กรณีลืมรหัสผ่าน ระบบกำหนดให้ส่งเรื่องแจ้งผู้ดูแลระบบ (Admin) เพื่อทำการรีเซ็ตรหัสผ่านกลับไปเป็น <strong className="underline">รหัสพนักงาน (Employee Code)</strong> ซึ่งเป็นรหัสผ่านเริ่มต้นของระบบ
+                </p>
+              </div>
+
+              <form onSubmit={handleRequestAdminReset} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                    ระบุชื่อพนักงาน หรือชื่อเล่นที่ต้องการขอ OTP
+                    ระบุชื่อพนักงาน หรือรหัสพนักงานของคุณ
                   </label>
                   <input
                     type="text"
                     value={forgotUsername}
                     onChange={(e) => setForgotUsername(e.target.value)}
-                    placeholder="พิมพ์ชื่อ หรือชื่อเล่น เช่น Boy, Kai, Siwapong..."
+                    placeholder="พิมพ์ชื่อ หรือรหัสพนักงาน เช่น Kai, Boy, 0756208..."
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition"
                   />
                   <p className="text-[11px] text-slate-500">
-                    ระบบจะส่ง OTP ยืนยันไปยังเบอร์มือถือที่ลงทะเบียนไว้ในระบบของพนักงานท่านนี้
+                    ระบบจะบันทึกคำขอแจ้ง Admin ในระบบ Audit Logs และให้ Admin ช่วยรีเซ็ตให้
                   </p>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-sm transition shadow-md flex items-center justify-center space-x-2"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>ส่งรหัส OTP ไปยังเบอร์มือถือ</span>
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* MODE 3: Verify OTP & Set New Password */}
-          {mode === 'FORGOT_VERIFY_OTP' && otpTargetData && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center space-x-2">
-                  <KeyRound className="w-5 h-5 text-indigo-500" />
-                  <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                    ยืนยัน OTP และสร้างรหัสผ่านใหม่
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('LOGIN');
-                    setErrorMessage('');
-                  }}
-                  className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium flex items-center space-x-1"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>ยกเลิก</span>
-                </button>
-              </div>
-
-              {/* Target Employee Info */}
-              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-indigo-900 dark:text-indigo-200">
-                    {otpTargetData.targetName}
-                  </div>
-                  <div className="text-indigo-600 dark:text-indigo-400 font-medium text-[11px]">
-                    📱 เบอร์มือถือ: {otpTargetData.targetPhoneMasked}
-                  </div>
-                </div>
-                <span className="font-mono text-[10px] bg-indigo-200 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-2 py-0.5 rounded-lg">
-                  {otpTargetData.refCode}
-                </span>
-              </div>
-
-              {/* Simulated SMS Notification Card */}
-              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/50 border-2 border-amber-300 dark:border-amber-700 rounded-2xl shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-amber-800 dark:text-amber-300 font-bold text-xs">
-                  <span className="flex items-center space-x-1.5">
-                    <MessageSquare className="w-4 h-4 text-amber-600" />
-                    <span>📱 [SMS Simulator] ข้อความจำลองส่งเข้ามือถือ</span>
-                  </span>
-                  <span className="text-[10px] font-mono text-amber-600">SMS LIVE</span>
-                </div>
-                <div className="text-xs text-amber-900 dark:text-amber-200 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800 font-mono flex items-center justify-between">
-                  <div>
-                    รหัส OTP คือ: <span className="font-black text-indigo-600 dark:text-indigo-400 text-base">{otpTargetData.otpCode}</span> (Ref: {otpTargetData.refCode})
-                  </div>
+                <div className="grid grid-cols-1 gap-2">
                   <button
-                    type="button"
-                    onClick={() => setEnteredOtp(otpTargetData.otpCode)}
-                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-sans font-bold shadow-sm transition"
+                    type="submit"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs transition shadow-md flex items-center justify-center space-x-2"
                   >
-                    กรอกให้อัตโนมัติ
+                    <MessageSquare className="w-4 h-4" />
+                    <span>📩 ส่งคำขอแจ้งแอดมิน</span>
                   </button>
-                </div>
-              </div>
 
-              {/* Form inputs */}
-              <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
-                {/* OTP Input */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-bold text-slate-700 dark:text-slate-200">
-                      กรอกรหัส OTP 6 หลัก
-                    </label>
-                    <span className="text-[11px] text-slate-500">
-                      {timerCount > 0 ? (
-                        `ขอรหัสใหม่ได้ใน ${timerCount}s`
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleResendOTP}
-                          className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
-                        >
-                          ขอรหัส OTP อีกครั้ง
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={enteredOtp}
-                    onChange={(e) => setEnteredOtp(e.target.value)}
-                    placeholder="123456"
-                    className="w-full text-center tracking-widest font-mono text-lg font-bold px-4 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* New Password */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                    รหัสผ่านใหม่ (New Password)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="กำหนดรหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)"
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+                  {requestResult?.targetId && (
                     <button
                       type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400"
+                      onClick={handleDirectResetToEmpCode}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition shadow-md flex items-center justify-center space-x-2"
                     >
-                      {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      <RotateCcw className="w-4 h-4" />
+                      <span>🔄 รีเซ็ตรหัสผ่านเป็นรหัสพนักงานทันที (Auto Reset)</span>
                     </button>
-                  </div>
+                  )}
                 </div>
-
-                {/* Confirm New Password */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                    ยืนยันรหัสผ่านใหม่ (Confirm Password)
-                  </label>
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* Submit Reset Button */}
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition shadow-md flex items-center justify-center space-x-1.5 mt-2"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>บันทึกรหัสผ่านใหม่และเข้าสู่ระบบ</span>
-                </button>
               </form>
             </div>
           )}

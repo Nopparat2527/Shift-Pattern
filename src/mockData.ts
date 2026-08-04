@@ -160,6 +160,8 @@ export const INITIAL_USERS: User[] = [
     email: 'admin@company.com',
     role: 'ADMIN',
     position: 'System Administrator / HR Director',
+    employeeCode: 'ADM-001',
+    phone: '081-000-0001',
   },
   {
     id: 'user-sup-1',
@@ -168,6 +170,8 @@ export const INITIAL_USERS: User[] = [
     role: 'SUPERVISOR',
     departmentId: 'dept-1', // F&P
     position: 'หัวหน้าแผนก F&P (Supervisor A)',
+    employeeCode: '0756208',
+    phone: '081-234-5678',
   },
   {
     id: 'user-sup-2',
@@ -176,6 +180,8 @@ export const INITIAL_USERS: User[] = [
     role: 'SUPERVISOR',
     departmentId: 'dept-2', // INJ
     position: 'หัวหน้าแผนก INJ (Supervisor B)',
+    employeeCode: '0756300',
+    phone: '089-876-5432',
   },
   {
     id: 'user-admin-2',
@@ -183,6 +189,8 @@ export const INITIAL_USERS: User[] = [
     email: 'kittipong@company.com',
     role: 'ADMIN',
     position: 'ผู้ดูแลระบบร่วม (Co-Admin)',
+    employeeCode: 'ADM-002',
+    phone: '082-999-8888',
   },
 ];
 
