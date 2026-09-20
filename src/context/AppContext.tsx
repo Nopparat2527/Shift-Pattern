@@ -165,6 +165,11 @@ interface AppContextType {
 
   // Reset System Data
   resetToDefaultData: () => void;
+
+  // Server Synchronization & Access Control
+  isServerSynced: boolean;
+  lastServerSyncTime: Date;
+  syncWithServer: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -340,6 +345,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_inj_plan_options`, JSON.stringify(injPlanOptions));
   }, [injPlanOptions]);
 
+  // Server Synchronization State
+  const [isServerSynced, setIsServerSynced] = useState<boolean>(true);
+  const [lastServerSyncTime, setLastServerSyncTime] = useState<Date>(new Date());
+
+  // Function to load authoritative shared data from server
+  const fetchServerData = async (isInitial = false) => {
+    try {
+      const res = await fetch('/api/data');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data) return;
+
+      if (Array.isArray(data.shifts) && data.shifts.length > 0) {
+        setShifts(data.shifts);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_shifts`, JSON.stringify(data.shifts));
+      }
+      if (data.productionPlans && Object.keys(data.productionPlans).length > 0) {
+        setProductionPlans(data.productionPlans);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_prod_plans`, JSON.stringify(data.productionPlans));
+      }
+      if (Array.isArray(data.departments) && data.departments.length > 0) {
+        setDepartments(data.departments);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_departments`, JSON.stringify(data.departments));
+      }
+      if (Array.isArray(data.employees) && data.employees.length > 0) {
+        setEmployees(data.employees);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_employees`, JSON.stringify(data.employees));
+      }
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        setUsers(data.users);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_users`, JSON.stringify(data.users));
+      }
+      if (Array.isArray(data.holidays) && data.holidays.length > 0) {
+        setHolidays(data.holidays);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_holidays`, JSON.stringify(data.holidays));
+      }
+      if (Array.isArray(data.yearlyConfigs) && data.yearlyConfigs.length > 0) {
+        setYearlyConfigs(data.yearlyConfigs);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_yearly`, JSON.stringify(data.yearlyConfigs));
+      }
+      if (Array.isArray(data.shiftTypes) && data.shiftTypes.length > 0) {
+        setShiftTypes(data.shiftTypes);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_shift_types`, JSON.stringify(data.shiftTypes));
+      }
+      if (Array.isArray(data.fpPlanOptions) && data.fpPlanOptions.length > 0) {
+        setFpPlanOptions(data.fpPlanOptions);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_fp_plan_options`, JSON.stringify(data.fpPlanOptions));
+      }
+      if (Array.isArray(data.injPlanOptions) && data.injPlanOptions.length > 0) {
+        setInjPlanOptions(data.injPlanOptions);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_inj_plan_options`, JSON.stringify(data.injPlanOptions));
+      }
+      if (data.passwords && typeof data.passwords === 'object') {
+        setPasswords((prev) => ({ ...prev, ...data.passwords }));
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_passwords`, JSON.stringify(data.passwords));
+      }
+      if (Array.isArray(data.swapRequests)) {
+        setSwapRequests(data.swapRequests);
+      }
+      if (Array.isArray(data.auditLogs)) {
+        setAuditLogs(data.auditLogs);
+      }
+
+      setIsServerSynced(true);
+      setLastServerSyncTime(new Date());
+    } catch (err) {
+      console.warn('[Sync] Server sync unavailable, continuing with local data:', err);
+    }
+  };
+
+  const syncWithServer = async () => {
+    await fetchServerData(false);
+  };
+
+  // Synchronize with server on mount and in background every 10s
+  useEffect(() => {
+    fetchServerData(true);
+
+    const interval = setInterval(() => {
+      fetchServerData(false);
+    }, 10000);
+
+    const handleFocus = () => fetchServerData(false);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // Self-heal currentUser role if user is a supervisor or admin
+  useEffect(() => {
+    if (!currentUser) return;
+    const linkedUser = users.find(
+      (u) =>
+        u.id === currentUser.id ||
+        (u.employeeCode && currentUser.employeeCode && u.employeeCode === currentUser.employeeCode) ||
+        (u.name && currentUser.name && u.name.split(' ')[0] === currentUser.name.split(' ')[0])
+    );
+    const linkedEmp = employees.find(
+      (e) =>
+        e.id === currentUser.id ||
+        (e.employeeCode && currentUser.employeeCode && e.employeeCode === currentUser.employeeCode) ||
+        (e.name && currentUser.name && e.name.split(' ')[0] === currentUser.name.split(' ')[0])
+    );
+
+    const isSupervisorOfDept = departments.some(
+      (d) =>
+        d.supervisorId === currentUser.id ||
+        d.supervisorIds?.includes(currentUser.id) ||
+        (linkedUser && (d.supervisorId === linkedUser.id || d.supervisorIds?.includes(linkedUser.id))) ||
+        (linkedEmp && (d.supervisorId === linkedEmp.id || d.supervisorIds?.includes(linkedEmp.id)))
+    );
+
+    const isSupervisorPosition =
+      currentUser.position?.includes('หัวหน้า') ||
+      currentUser.position?.toLowerCase().includes('supervisor') ||
+      linkedEmp?.position?.includes('หัวหน้า') ||
+      linkedEmp?.position?.toLowerCase().includes('supervisor');
+
+    let correctedRole: UserRole = currentUser.role;
+    if (linkedUser?.role === 'ADMIN') {
+      correctedRole = 'ADMIN';
+    } else if (linkedUser?.role === 'SUPERVISOR' || isSupervisorOfDept || isSupervisorPosition) {
+      correctedRole = 'SUPERVISOR';
+    }
+
+    const correctedDeptId = linkedUser?.departmentId || linkedEmp?.departmentId || currentUser.departmentId;
+
+    if (currentUser.role !== correctedRole || (!currentUser.departmentId && correctedDeptId)) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        role: correctedRole,
+        departmentId: correctedDeptId,
+      }));
+    }
+  }, [users, employees, departments, currentUser]);
+
   // Derived Access Roles
   const isAdmin = currentUser.role === 'ADMIN';
   const isSupervisor = currentUser.role === 'SUPERVISOR';
@@ -414,26 +558,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const emp = employees.find((e) => e.id === empId);
     if (!emp) return;
 
+    // Check if this employee is linked to a supervisor or admin
+    const linkedUser = users.find(
+      (u) =>
+        u.employeeCode === emp.employeeCode ||
+        u.id === emp.id ||
+        (u.name && emp.name && u.name.split(' ')[0] === emp.name.split(' ')[0])
+    );
+
+    const isSupervisorOfDept = departments.some(
+      (d) =>
+        d.supervisorId === emp.id ||
+        d.supervisorIds?.includes(emp.id) ||
+        (linkedUser && (d.supervisorId === linkedUser.id || d.supervisorIds?.includes(linkedUser.id)))
+    );
+
+    const isSupervisorPosition =
+      emp.position?.includes('หัวหน้า') ||
+      emp.position?.toLowerCase().includes('supervisor') ||
+      linkedUser?.position?.includes('หัวหน้า') ||
+      linkedUser?.position?.toLowerCase().includes('supervisor');
+
+    let finalRole: UserRole = 'EMPLOYEE';
+    if (linkedUser?.role === 'ADMIN') {
+      finalRole = 'ADMIN';
+    } else if (linkedUser?.role === 'SUPERVISOR' || isSupervisorOfDept || isSupervisorPosition) {
+      finalRole = 'SUPERVISOR';
+    }
+
+    const deptId = linkedUser?.departmentId || emp.departmentId;
+
     const empUser: User = {
-      id: `user-emp-${emp.id}`,
-      name: `${emp.name} (${emp.codeName})`,
-      email: `${emp.employeeCode}@company.com`,
-      role: 'EMPLOYEE',
-      departmentId: emp.departmentId,
-      position: emp.position || 'พนักงานปฏิบัติการ',
+      id: linkedUser?.id || `user-emp-${emp.id}`,
+      name: linkedUser?.name || `${emp.name} (${emp.codeName})`,
+      email: linkedUser?.email || `${emp.employeeCode}@company.com`,
+      role: finalRole,
+      departmentId: deptId,
+      position: linkedUser?.position || emp.position || (finalRole === 'SUPERVISOR' ? 'หัวหน้าแผนก' : 'พนักงานปฏิบัติการ'),
+      employeeCode: emp.employeeCode,
+      phone: emp.phone || linkedUser?.phone,
     };
 
     setCurrentUser(empUser);
     setIsLoggedIn(true);
 
-    const dept = departments.find((d) => d.id === emp.departmentId);
+    const dept = departments.find((d) => d.id === deptId);
     addAuditLog(
       'USER_MANAGEMENT',
       'เข้าสู่ระบบ (Employee Login)',
-      `${emp.name} (${emp.codeName}) - ${emp.employeeCode}`,
+      `${empUser.name} - ${emp.employeeCode}`,
       'LOGOUT',
       'LOGIN',
-      `เข้าสู่ระบบพนักงาน - ดูตารางกะแผนก ${dept?.name || emp.departmentId} (โหมดอ่านอย่างเดียว)`
+      `เข้าสู่ระบบในฐานะ ${finalRole} - แผนก ${dept?.name || deptId}`
     );
   };
 
@@ -474,23 +650,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `${e.name} (${e.codeName})`.toLowerCase().includes(q)
     );
 
-    if (empMatch) {
-      const expectedPass = passwords[empMatch.id] || empMatch.employeeCode;
-      if (p === expectedPass) {
-        loginAsEmployee(empMatch.id);
-        const dept = departments.find((d) => d.id === empMatch.departmentId);
-        return {
-          success: true,
-          message: `ยินดีต้อนรับคุณ ${empMatch.name} (${empMatch.codeName}) - แผนก ${dept?.name || empMatch.departmentId}`,
-        };
-      } else {
-        return {
-          success: false,
-          message: 'รหัสผ่านไม่ถูกต้อง (รหัสผ่านเริ่มต้นคือ รหัสพนักงาน) กรุณาตรวจสอบอีกครั้ง หรือกด "ลืมรหัสผ่าน"',
-        };
-      }
-    }
-
     // 2. Search users (Admins / Supervisors)
     const userMatch = users.find(
       (u) =>
@@ -501,21 +660,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         u.id.toLowerCase() === q
     );
 
-    if (userMatch) {
-      const linkedEmp = employees.find((e) => e.name.toLowerCase().includes(userMatch.name.split(' ')[0].toLowerCase()));
-      const defaultPass = linkedEmp ? linkedEmp.employeeCode : '123456';
-      const expectedPass = passwords[userMatch.id] || (linkedEmp ? passwords[linkedEmp.id] : undefined) || defaultPass;
+    if (empMatch || userMatch) {
+      // Find linked user for supervisor/admin role check
+      const linkedUser = userMatch || users.find(
+        (u) =>
+          (empMatch && u.employeeCode === empMatch.employeeCode) ||
+          (empMatch && u.id === empMatch.id) ||
+          (empMatch && u.name && empMatch.name && u.name.split(' ')[0] === empMatch.name.split(' ')[0])
+      );
 
-      if (p === expectedPass || p === defaultPass || p === '123456' || (linkedEmp && p === linkedEmp.employeeCode)) {
-        loginAsUser(userMatch.id);
+      const isSupervisorOfDept = departments.some(
+        (d) =>
+          (empMatch && (d.supervisorId === empMatch.id || d.supervisorIds?.includes(empMatch.id))) ||
+          (linkedUser && (d.supervisorId === linkedUser.id || d.supervisorIds?.includes(linkedUser.id)))
+      );
+
+      const isSupervisorPosition =
+        (empMatch?.position && (empMatch.position.includes('หัวหน้า') || empMatch.position.toLowerCase().includes('supervisor'))) ||
+        (linkedUser?.position && (linkedUser.position.includes('หัวหน้า') || linkedUser.position.toLowerCase().includes('supervisor')));
+
+      let finalRole: UserRole = 'EMPLOYEE';
+      if (linkedUser?.role === 'ADMIN') {
+        finalRole = 'ADMIN';
+      } else if (linkedUser?.role === 'SUPERVISOR' || isSupervisorOfDept || isSupervisorPosition) {
+        finalRole = 'SUPERVISOR';
+      }
+
+      // Check passwords
+      const expectedPass =
+        (empMatch && passwords[empMatch.id]) ||
+        (linkedUser && passwords[linkedUser.id]) ||
+        empMatch?.employeeCode ||
+        linkedUser?.employeeCode ||
+        '123456';
+
+      const isPassValid =
+        p === expectedPass ||
+        p === '123456' ||
+        (empMatch && p === empMatch.employeeCode) ||
+        (linkedUser && linkedUser.employeeCode && p === linkedUser.employeeCode);
+
+      if (isPassValid) {
+        const deptId = linkedUser?.departmentId || empMatch?.departmentId;
+        const finalUser: User = {
+          id: linkedUser?.id || (empMatch ? `user-emp-${empMatch.id}` : 'user-custom'),
+          name: linkedUser?.name || (empMatch ? `${empMatch.name} (${empMatch.codeName})` : username),
+          email: linkedUser?.email || (empMatch ? `${empMatch.employeeCode}@company.com` : 'user@company.com'),
+          role: finalRole,
+          departmentId: deptId,
+          position: linkedUser?.position || empMatch?.position || (finalRole === 'SUPERVISOR' ? 'หัวหน้าแผนก' : 'พนักงานปฏิบัติการ'),
+          employeeCode: linkedUser?.employeeCode || empMatch?.employeeCode,
+          phone: linkedUser?.phone || empMatch?.phone,
+        };
+
+        setCurrentUser(finalUser);
+        setIsLoggedIn(true);
+
+        const dept = departments.find((d) => d.id === deptId);
+        const roleLabel =
+          finalRole === 'ADMIN'
+            ? 'แอดมินระบบ (ทุกแผนก)'
+            : finalRole === 'SUPERVISOR'
+            ? `หัวหน้าแผนก ${dept?.name || ''}`
+            : `พนักงานทั่วไป (${dept?.name || ''})`;
+
+        addAuditLog(
+          'USER_MANAGEMENT',
+          'เข้าสู่ระบบ (Login)',
+          `${finalUser.name} (${finalUser.role})`,
+          'LOGOUT',
+          'LOGIN',
+          `เข้าสู่ระบบสำเร็จในฐานะ ${roleLabel}`
+        );
+
         return {
           success: true,
-          message: `ยินดีต้อนรับคุณ ${userMatch.name} (${userMatch.role})`,
+          message: `ยินดีต้อนรับคุณ ${finalUser.name} (${roleLabel})`,
         };
       } else {
         return {
           success: false,
-          message: 'รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง หรือกด "ลืมรหัสผ่าน"',
+          message: 'รหัสผ่านไม่ถูกต้อง (รหัสผ่านเริ่มต้นคือ รหัสพนักงาน) กรุณาตรวจสอบอีกครั้ง หรือกด "ลืมรหัสผ่าน"',
         };
       }
     }
@@ -1216,6 +1441,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `กะใหม่: ${shiftCode}`,
         note ? `หมายเหตุ: ${note}` : undefined
       );
+
+      // Async sync to server
+      fetch('/api/shifts/single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId,
+          date,
+          shiftCode,
+          actor: { name: currentUser.name, id: currentUser.id },
+        }),
+      }).catch((e) => console.warn('[Sync] Shift update async error:', e));
     }
   };
 
@@ -1267,6 +1504,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'อัปเดตตารางกะกลุ่มเรียบร้อย',
       'ดำเนินการโดยหัวหน้าแผนก'
     );
+
+    // Async sync to server
+    fetch('/api/shifts/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updates,
+        actor: { name: currentUser.name, id: currentUser.id },
+      }),
+    }).catch((e) => console.warn('[Sync] Batch shift update async error:', e));
   };
 
   // --- Production Plan Management ---
@@ -1291,6 +1538,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `${field === 'fp' ? 'F&P' : 'INJ'}: ${value}`,
       'แก้ไขแผนการผลิตประจำวัน'
     );
+
+    // Async sync to server
+    fetch('/api/production-plans/single', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, field, value }),
+    }).catch((e) => console.warn('[Sync] Plan update async error:', e));
   };
 
   const batchUpdateProductionPlan = (updates: { date: string; fp?: string; inj?: string }[]) => {
@@ -1314,6 +1568,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'อัปเดตสำเร็จ',
       'ดำเนินการโดยหัวหน้าแผนก/แอดมิน'
     );
+
+    // Async sync to server
+    fetch('/api/production-plans/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    }).catch((e) => console.warn('[Sync] Batch plan update async error:', e));
   };
 
   // --- Shift Swap & Leave Requests ---
@@ -1539,6 +1800,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setShiftTypes(DEFAULT_SHIFT_TYPES);
     setFpPlanOptions(INITIAL_FP_PLAN_OPTIONS);
     setInjPlanOptions(INITIAL_INJ_PLAN_OPTIONS);
+
+    // Sync reset to server
+    fetch('/api/reset-data', { method: 'POST' }).catch((e) => console.warn('[Sync] Reset error:', e));
   };
 
   return (
@@ -1636,6 +1900,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reviewSwapRequest,
 
         resetToDefaultData,
+
+        isServerSynced,
+        lastServerSyncTime,
+        syncWithServer,
       }}
     >
       {children}

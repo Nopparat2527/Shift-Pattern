@@ -74,7 +74,6 @@ export const ShiftScheduler: React.FC = () => {
     currentUser,
     isAdmin,
     isSupervisor,
-    isReadOnly,
     userDepartmentId,
     departments,
     employees,
@@ -94,6 +93,8 @@ export const ShiftScheduler: React.FC = () => {
     shiftTypes,
     fpPlanOptions,
     injPlanOptions,
+    isServerSynced,
+    syncWithServer,
   } = useApp();
 
   const nextMonthIdx = activeMonth === 12 ? 0 : activeMonth;
@@ -103,9 +104,9 @@ export const ShiftScheduler: React.FC = () => {
   const [isOptionManagerOpen, setIsOptionManagerOpen] = useState(false);
   const [optionManagerDefaultTab, setOptionManagerDefaultTab] = useState<'SHIFT' | 'FP' | 'INJ'>('SHIFT');
 
-  // Selected Department Filter
+  // Selected Department Filter (defaults to user's department or first available department)
   const [selectedDeptId, setSelectedDeptId] = useState<string>(() => {
-    if ((isSupervisor || isReadOnly) && userDepartmentId) return userDepartmentId;
+    if (userDepartmentId) return userDepartmentId;
     return departments[0]?.id || '';
   });
 
@@ -188,10 +189,21 @@ export const ShiftScheduler: React.FC = () => {
   const infoColsCount = (effectiveShowFullName ? 1 : 0) + (effectiveShowNickName ? 1 : 0);
   const planTitleColSpan = effectiveShowFullName ? 1 : 0;
 
-  // Determine effective department ID: Employees & Supervisors locked to their department
-  const isDeptLocked = !isAdmin && !!userDepartmentId;
-  const effectiveDeptId = isDeptLocked ? userDepartmentId : selectedDeptId;
+  // Effective department being viewed
+  const effectiveDeptId = selectedDeptId || userDepartmentId || departments[0]?.id || '';
   const currentDept = departments.find((d) => d.id === effectiveDeptId);
+
+  // Check if current user has edit permission for the viewed department:
+  // 1. Admin can edit any department
+  // 2. Supervisor can edit their assigned department or departments where they are listed as supervisor
+  const isSupervisorOfCurrentDept =
+    isSupervisor &&
+    (effectiveDeptId === userDepartmentId ||
+      currentDept?.supervisorId === currentUser.id ||
+      currentDept?.supervisorIds?.includes(currentUser.id));
+
+  const canEdit = isAdmin || isSupervisorOfCurrentDept;
+  const isReadOnly = !canEdit;
 
   // Filter employees for active department
   const filteredEmployees = useMemo(() => {
@@ -505,56 +517,89 @@ export const ShiftScheduler: React.FC = () => {
         </div>
       )}
 
-      {/* Role Isolation Restriction Alert Banner */}
+      {/* Unified Access & Department Banner with Central Sync Status */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start space-x-3">
-          <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30 shrink-0">
+          <div className={`p-2 rounded-xl border shrink-0 ${
+            canEdit
+              ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+              : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+          }`}>
             <ShieldAlert className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <h2 className="text-sm font-bold text-white">
-                ตารางกะประจำทีม: {currentDept?.name || 'เลือกแผนก'}
+                ตารางกะประจำแผนก: {currentDept?.name || 'เลือกแผนก'}
               </h2>
-              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                 Data Isolated
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 mt-0.5">
-              {isReadOnly ? (
-                <span className="text-amber-300 font-medium">
-                  🔒 สิทธิ์พนักงานทั่วไป ({currentUser.name}): เข้าดูได้เฉพาะตารางกะแผนก {currentDept?.name} เท่านั้น (โหมดอ่านอย่างเดียว - ไม่สามารถแก้ไขได้)
-                </span>
-              ) : isSupervisor ? (
-                <span>
-                  🔒 สิทธิ์หัวหน้าแผนก: คุณกำลังจัดการข้อมูลทีมเฉพาะ <strong>{currentDept?.name}</strong> ระบบปิดกั้นไม่ให้แก้ไขหรือมองเห็นตารางกะของแผนกอื่นโดยเด็ดขาด
+              {canEdit ? (
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                  สิทธิ์แก้ไข (Edit Access)
                 </span>
               ) : (
-                <span>
-                  👑 สิทธิ์แอดมินระบบ: คุณสามารถสลับดูตารางกะของทุกแผนก หรือตั้งค่าภาพรวมบริษัทได้
+                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                  โหมดอ่านอย่างเดียว (View Only)
+                </span>
+              )}
+
+              {/* Central Server Sync Badge */}
+              <span className="inline-flex items-center space-x-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-0.5 rounded-full">
+                <span className={`w-1.5 h-1.5 rounded-full ${isServerSynced ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                <span>{isServerSynced ? 'ข้อมูลซิงค์ตรงกันทุกเครื่อง' : 'กำลังซิงค์...'}</span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              {isAdmin ? (
+                <span className="text-emerald-300 font-medium">
+                  👑 สิทธิ์แอดมินระบบ: คุณสามารถดูและจัดตารางกะ แผนการผลิตของทุกแผนกได้แบบรวมศูนย์ ข้อมูลซิงค์ทุกเครื่องอัตโนมัติ
+                </span>
+              ) : isSupervisor ? (
+                canEdit ? (
+                  <span className="text-indigo-300 font-medium">
+                    ✏️ สิทธิ์หัวหน้าแผนก ({currentDept?.name}): คุณมีสิทธิ์จัดตารางกะ วางแผนผลิต (F&P / INJ) และบันทึกข้อมูลทีมนี้อย่างสมบูรณ์
+                  </span>
+                ) : (
+                  <span className="text-amber-300 font-medium">
+                    👀 กำลังดูตารางกะแผนก {currentDept?.name} (โหมดอ่านอย่างเดียว): สิทธิ์แก้ไขสงวนไว้สำหรับหัวหน้าแผนกนี้และแอดมิน คุณสามารถสลับกลับไปยังแผนกที่คุณดูแลเพื่อจัดกะ
+                  </span>
+                )
+              ) : (
+                <span className="text-slate-300 font-medium">
+                  👀 โหมดพนักงานทั่วไป ({currentUser.name}): ตารางกะและแผนการผลิตแผนก {currentDept?.name} อัปเดตตรงกับหัวหน้าแผนกและระบบกลางแบบเรียลไทม์
                 </span>
               )}
             </p>
           </div>
         </div>
 
-        {/* Department Switcher (Admin Only) */}
-        {isAdmin && (
-          <div className="flex items-center space-x-2 shrink-0">
+        {/* Department Switcher & Manual Refresh (Accessible by All Roles) */}
+        <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
+          <button
+            onClick={() => syncWithServer()}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition"
+            title="กดเพื่อดึงข้อมูลตารางกะล่าสุดจากเซิร์ฟเวอร์กลางทันที"
+          >
+            <span className="text-[11px]">🔄 ซิงค์ข้อมูลล่าสุด</span>
+          </button>
+
+          <div className="flex items-center space-x-2">
             <span className="text-xs text-slate-400 font-medium">เลือกแผนก:</span>
             <select
-              value={selectedDeptId}
+              value={effectiveDeptId}
               onChange={(e) => setSelectedDeptId(e.target.value)}
               className="bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
+              {departments.map((d) => {
+                const isMyDept = d.id === userDepartmentId;
+                return (
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({d.code}) {isMyDept ? ' ★ แผนกของคุณ' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Control Bar: Date Selector, Quick Paint Legend, Batch Actions */}
