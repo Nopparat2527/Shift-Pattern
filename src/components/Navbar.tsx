@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { MobileSyncModal } from './MobileSyncModal';
 import {
   Calendar,
   Users,
@@ -19,6 +20,8 @@ import {
   Sun,
   Moon,
   KeyRound,
+  Smartphone,
+  QrCode,
 } from 'lucide-react';
 
 export type NavTab =
@@ -54,6 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isMobileSyncOpen, setIsMobileSyncOpen] = useState(false);
 
   // Count pending requests
   const pendingSwapCount = swapRequests.filter((r) => r.status === 'PENDING').length;
@@ -83,8 +87,20 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             </div>
           </div>
 
-          {/* Active User Profile & Role Switcher Button */}
-          <div className="flex items-center space-x-3">
+          {/* Active User Profile, Mobile Sync & Role Switcher Button */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Mobile Sync / QR Code Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSyncOpen(true)}
+              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs px-2.5 sm:px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-semibold"
+              title="สแกน QR Code หรือคัดลอกลิงก์เพื่อเปิดบนมือถือ ให้ข้อมูลซิงค์ตรงกับ PC ทันที"
+            >
+              <QrCode className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">เปิดบนมือถือ (QR Sync)</span>
+              <span className="sm:hidden">มือถือ</span>
+            </button>
+
             <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl p-1.5 flex items-center space-x-3 px-3">
               <div className="flex flex-col text-right">
                 <span className="text-xs font-semibold text-slate-200">
@@ -133,6 +149,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             <ChangePasswordModal
               isOpen={isChangePasswordOpen}
               onClose={() => setIsChangePasswordOpen(false)}
+            />
+
+            <MobileSyncModal
+              isOpen={isMobileSyncOpen}
+              onClose={() => setIsMobileSyncOpen(false)}
             />
 
             {/* Dark / Light Theme Toggle */}
