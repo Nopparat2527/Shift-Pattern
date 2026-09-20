@@ -31,7 +31,45 @@ import {
   Save,
 } from 'lucide-react';
 
+const MONTH_NAMES_TH = [
+  'มกราคม',
+  'กุมภาพันธ์',
+  'มีนาคม',
+  'เมษายน',
+  'พฤษภาคม',
+  'มิถุนายน',
+  'กรกฎาคม',
+  'สิงหาคม',
+  'กันยายน',
+  'ตุลาคม',
+  'พฤศจิกายน',
+  'ธันวาคม',
+];
+
+const MONTH_SHORT_TH = [
+  'ม.ค.',
+  'ก.พ.',
+  'มี.ค.',
+  'เม.ย.',
+  'พ.ค.',
+  'มิ.ย.',
+  'ก.ค.',
+  'ส.ค.',
+  'ก.ย.',
+  'ต.ค.',
+  'พ.ย.',
+  'ธ.ค.',
+];
+
 export const ShiftScheduler: React.FC = () => {
+  const monthNamesTh = MONTH_NAMES_TH;
+
+  // Timeline view range: 1 = Current month only, 2 = Current + Next month (Default: allows scrolling freely into next month), 3 = 3 months
+  const [timelineMonthsCount, setTimelineMonthsCount] = useState<number>(2);
+
+  // Horizontal scroll container reference for smooth programmatic scrolling
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
   const {
     currentUser,
     isAdmin,
@@ -57,6 +95,9 @@ export const ShiftScheduler: React.FC = () => {
     fpPlanOptions,
     injPlanOptions,
   } = useApp();
+
+  const nextMonthIdx = activeMonth === 12 ? 0 : activeMonth;
+  const nextMonthName = MONTH_NAMES_TH[nextMonthIdx];
 
   // Option Manager Modal state
   const [isOptionManagerOpen, setIsOptionManagerOpen] = useState(false);
@@ -164,9 +205,8 @@ export const ShiftScheduler: React.FC = () => {
     });
   }, [employees, effectiveDeptId, searchTerm]);
 
-  // Generate days for active month and year
+  // Generate days for active month and subsequent months for seamless horizontal scrolling
   const monthDays = useMemo(() => {
-    const daysInMonth = new Date(activeYear, activeMonth, 0).getDate();
     const result = [];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
@@ -174,35 +214,107 @@ export const ShiftScheduler: React.FC = () => {
       now.getDate()
     ).padStart(2, '0')}`;
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(activeYear, activeMonth - 1, day);
-      const dateStr = `${activeYear}-${String(activeMonth).padStart(2, '0')}-${String(
-        day
-      ).padStart(2, '0')}`;
-      const dayOfWeek = dateObj.getDay();
-      
-      // Calculate week number
-      const firstDayOfYear = new Date(activeYear, 0, 1);
-      const pastDaysOfYear = (dateObj.getTime() - firstDayOfYear.getTime()) / 86400000;
-      const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+    for (let mOffset = 0; mOffset < timelineMonthsCount; mOffset++) {
+      const totalMonths = (activeMonth - 1) + mOffset;
+      const targetYear = activeYear + Math.floor(totalMonths / 12);
+      const targetMonth = (totalMonths % 12) + 1;
+      const daysInThisMonth = new Date(targetYear, targetMonth, 0).getDate();
 
-      // Check if it matches a company holiday
-      const holiday = holidays.find((h) => h.date === dateStr);
+      for (let day = 1; day <= daysInThisMonth; day++) {
+        const dateObj = new Date(targetYear, targetMonth - 1, day);
+        const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(
+          day
+        ).padStart(2, '0')}`;
+        const dayOfWeek = dateObj.getDay();
+        
+        // Calculate week number
+        const firstDayOfYear = new Date(targetYear, 0, 1);
+        const pastDaysOfYear = (dateObj.getTime() - firstDayOfYear.getTime()) / 86400000;
+        const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
 
-      result.push({
-        day,
-        dateStr,
-        dayName: dayNames[dayOfWeek],
-        dayOfWeek,
-        weekNumber,
-        isSunday: dayOfWeek === 0,
-        isSaturday: dayOfWeek === 6,
-        isToday: dateStr === todayStr,
-        holiday,
-      });
+        // Check if it matches a company holiday
+        const holiday = holidays.find((h) => h.date === dateStr);
+
+        result.push({
+          day,
+          dateStr,
+          dayName: dayNames[dayOfWeek],
+          dayOfWeek,
+          weekNumber,
+          isSunday: dayOfWeek === 0,
+          isSaturday: dayOfWeek === 6,
+          isToday: dateStr === todayStr,
+          holiday,
+          month: targetMonth,
+          year: targetYear,
+          monthName: MONTH_NAMES_TH[targetMonth - 1],
+          monthShort: MONTH_SHORT_TH[targetMonth - 1],
+          isFirstDayOfMonth: day === 1,
+          isLastDayOfMonth: day === daysInThisMonth,
+          isCurrentMonth: mOffset === 0,
+          monthIndex: mOffset,
+        });
+      }
     }
     return result;
-  }, [activeYear, activeMonth, holidays]);
+  }, [activeYear, activeMonth, timelineMonthsCount, holidays]);
+
+  // Group days by month for the top-level Month Header
+  const monthGroups = useMemo(() => {
+    const groups: {
+      year: number;
+      month: number;
+      monthName: string;
+      monthShort: string;
+      isCurrentMonth: boolean;
+      days: typeof monthDays;
+    }[] = [];
+
+    monthDays.forEach((d) => {
+      let grp = groups.find((g) => g.year === d.year && g.month === d.month);
+      if (!grp) {
+        grp = {
+          year: d.year,
+          month: d.month,
+          monthName: d.monthName,
+          monthShort: d.monthShort,
+          isCurrentMonth: d.isCurrentMonth,
+          days: [],
+        };
+        groups.push(grp);
+      }
+      grp.days.push(d);
+    });
+
+    return groups;
+  }, [monthDays]);
+
+  // Days strictly belonging to activeMonth (for 2-week rotation or month-scoped operations)
+  const currentMonthDays = useMemo(() => {
+    return monthDays.filter((d) => d.isCurrentMonth);
+  }, [monthDays]);
+
+  // Quick horizontal scroll handlers
+  const scrollToToday = () => {
+    if (!scrollContainerRef.current) return;
+    const todayEl = scrollContainerRef.current.querySelector('[data-is-today="true"]');
+    if (todayEl) {
+      todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  };
+
+  const scrollToNextMonth = () => {
+    if (!scrollContainerRef.current) return;
+    const nextMonthEl = scrollContainerRef.current.querySelector('[data-first-of-next-month="true"]');
+    if (nextMonthEl) {
+      nextMonthEl.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    }
+  };
+
+  const scrollToStart = () => {
+    if (!scrollContainerRef.current) return;
+    scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+  };
 
   // Helper to get shift code for employee on a given date
   const getShiftForEmpDate = (employeeId: string, dateStr: string): ShiftTypeCode => {
@@ -248,7 +360,7 @@ export const ShiftScheduler: React.FC = () => {
     // 1. Assign Receiver staff = Morning (M) for the whole month
     const receiverEmp = filteredEmployees.find((e) => e.id === selectedReceiverId);
     if (receiverEmp) {
-      monthDays.forEach((d) => {
+      currentMonthDays.forEach((d) => {
         let codeToAssign: ShiftTypeCode = 'M';
         if (d.isSunday && (batchWeekPattern === 'SUN_OFF' || batchWeekPattern === 'MON_SAT')) {
           codeToAssign = 'OFF';
@@ -265,7 +377,7 @@ export const ShiftScheduler: React.FC = () => {
     rotatingEmps.forEach((emp, rotIdx) => {
       let workDayCounter = 0;
 
-      monthDays.forEach((d) => {
+      currentMonthDays.forEach((d) => {
         const isSunOff = d.isSunday && (batchWeekPattern === 'SUN_OFF' || batchWeekPattern === 'MON_SAT');
         let codeToAssign: ShiftTypeCode = 'M';
 
@@ -369,21 +481,6 @@ export const ShiftScheduler: React.FC = () => {
     link.click();
     document.body.removeChild(link);
   };
-
-  const monthNamesTh = [
-    'มกราคม',
-    'กุมภาพันธ์',
-    'มีนาคม',
-    'เมษายน',
-    'พฤษภาคม',
-    'มิถุนายน',
-    'กรกฎาคม',
-    'สิงหาคม',
-    'กันยายน',
-    'ตุลาคม',
-    'พฤศจิกายน',
-    'ธันวาคม',
-  ];
 
   return (
     <div className="space-y-6">
@@ -972,13 +1069,134 @@ export const ShiftScheduler: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Continuous Timeline & Quick Scroll Navigation Bar */}
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl text-xs">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
+            <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1">
+              <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+              <span>ช่วงเวลาที่แสดง (เลื่อนอิสระ):</span>
+            </span>
+
+            <div className="inline-flex bg-slate-200 dark:bg-slate-700 p-1 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setTimelineMonthsCount(1)}
+                className={`px-3 py-1 rounded-lg transition ${
+                  timelineMonthsCount === 1
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                }`}
+              >
+                1 เดือน
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimelineMonthsCount(2)}
+                className={`px-3 py-1 rounded-lg transition flex items-center space-x-1 ${
+                  timelineMonthsCount === 2
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                }`}
+              >
+                <span>2 เดือนต่อเนื่อง (เดือนนี้ + เดือนถัดไป)</span>
+                <span className="text-[9px] bg-white/25 text-white px-1.5 py-0.2 rounded-full font-extrabold">เลื่อนอิสระ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimelineMonthsCount(3)}
+                className={`px-3 py-1 rounded-lg transition ${
+                  timelineMonthsCount === 3
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                }`}
+              >
+                3 เดือน (ไตรมาส)
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Scroll Shortcuts */}
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-medium hidden sm:inline">เลื่อนเร็ว:</span>
+            <button
+              type="button"
+              onClick={scrollToStart}
+              className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition shadow-sm"
+              title="เลื่อนกลับไปวันแรกของเดือนปัจจุบัน"
+            >
+              ⏮️ ต้นเดือน
+            </button>
+            <button
+              type="button"
+              onClick={scrollToToday}
+              className="px-2.5 py-1 bg-sky-50 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 rounded-lg text-sky-700 dark:text-sky-300 font-bold hover:bg-sky-100 dark:hover:bg-sky-900/60 transition shadow-sm"
+              title="เลื่อนไปยังตำแหน่งของวันนี้"
+            >
+              🎯 วันนี้
+            </button>
+            {timelineMonthsCount > 1 && (
+              <button
+                type="button"
+                onClick={scrollToNextMonth}
+                className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-400 dark:border-emerald-800 rounded-lg text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition shadow-sm"
+                title={`เลื่อนไปยังวันที่ 1 ${nextMonthName} ทันที`}
+              >
+                ⏩ เลื่อนไปเดือนถัดไป ({nextMonthName})
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Excel-Style Production Shift Grid */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="overflow-x-auto max-w-full scrollbar-thin">
+        <div ref={scrollContainerRef} className="overflow-x-auto max-w-full custom-schedule-scrollbar pb-2">
           <table className="w-full text-xs text-left border-collapse select-none">
             <thead>
+              {/* Row 0: Month Range Header */}
+              <tr className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold border-b border-slate-300 dark:border-slate-700">
+                <th
+                  colSpan={infoColsCount}
+                  style={{ width: totalLeftHeaderW, minWidth: totalLeftHeaderW, maxWidth: totalLeftHeaderW, left: 0 }}
+                  className="p-1.5 border-r-2 border-slate-400 dark:border-slate-600 text-center bg-slate-300 dark:bg-slate-800 sticky left-0 z-30 text-[11px] font-black"
+                >
+                  <div className="flex items-center justify-center space-x-1">
+                    <CalendarDays className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>เดือน (Month)</span>
+                  </div>
+                </th>
+                {monthGroups.map((mg, gIdx) => {
+                  const isFirstGroup = gIdx === 0;
+                  const borderRight = gIdx < monthGroups.length - 1
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : 'border-r border-slate-300 dark:border-slate-700';
+
+                  return (
+                    <th
+                      key={`month-grp-${mg.year}-${mg.month}`}
+                      colSpan={mg.days.length}
+                      className={`p-2 text-center text-xs font-black tracking-wide ${borderRight} ${
+                        isFirstGroup
+                          ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-950 dark:text-indigo-200'
+                          : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-950 dark:text-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center space-x-2">
+                        <span>
+                          {mg.monthName} {mg.year + 543} ({mg.days.length} วัน)
+                        </span>
+                        {!isFirstGroup && (
+                          <span className="text-[10px] bg-emerald-600 text-white dark:bg-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                            เดือนถัดไป
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+
               {/* Row 0-A: Production Plan (F&P) */}
               <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700">
                 {planTitleW > 0 && (
@@ -1005,8 +1223,11 @@ export const ShiftScheduler: React.FC = () => {
                     : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300';
 
                   const isFPBrushActive = !!activeFPBrush;
+                  const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                   const isWeekEnd = d.isSaturday;
-                  const borderRightClass = isWeekEnd
+                  const borderRightClass = isMonthEnd
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
 
@@ -1023,7 +1244,7 @@ export const ShiftScheduler: React.FC = () => {
                               dateStr: d.dateStr,
                               field: 'fp',
                               currentVal: fpPlan,
-                              dayFormatted: `${d.day} ${monthNamesTh[activeMonth - 1]} (${d.dayName})`,
+                              dayFormatted: `${d.day} ${d.monthName} (${d.dayName})`,
                             });
                             setCustomPlanText(fpPlan);
                           }
@@ -1032,7 +1253,7 @@ export const ShiftScheduler: React.FC = () => {
                       className={`p-0 ${borderRightClass} min-w-[38px] max-w-[38px] cursor-pointer hover:ring-2 hover:ring-sky-500 transition ${bgColor} ${
                         isFPBrushActive ? 'ring-1 ring-sky-400 font-extrabold animate-pulse' : ''
                       }`}
-                      title={`แผนผลิต F&P วันที่ ${d.day} ${d.dayName}: ${fpPlan || 'ยังไม่ได้ระบุ (คลิกเพื่อแก้ไข)'}`}
+                      title={`แผนผลิต F&P วันที่ ${d.day} ${d.monthName} (${d.dayName}): ${fpPlan || 'ยังไม่ได้ระบุ (คลิกเพื่อแก้ไข)'}`}
                     >
                       <div className="min-h-[70px] py-1 flex items-center justify-center text-[10px] font-bold tracking-tight select-none [writing-mode:vertical-lr] rotate-180 mx-auto leading-none">
                         {fpPlan || '-'}
@@ -1068,8 +1289,11 @@ export const ShiftScheduler: React.FC = () => {
                     : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300';
 
                   const isINJBrushActive = !!activeINJBrush;
+                  const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                   const isWeekEnd = d.isSaturday;
-                  const borderRightClass = isWeekEnd
+                  const borderRightClass = isMonthEnd
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
 
@@ -1086,7 +1310,7 @@ export const ShiftScheduler: React.FC = () => {
                               dateStr: d.dateStr,
                               field: 'inj',
                               currentVal: injPlan,
-                              dayFormatted: `${d.day} ${monthNamesTh[activeMonth - 1]} (${d.dayName})`,
+                              dayFormatted: `${d.day} ${d.monthName} (${d.dayName})`,
                             });
                             setCustomPlanText(injPlan);
                           }
@@ -1095,7 +1319,7 @@ export const ShiftScheduler: React.FC = () => {
                       className={`p-1 ${borderRightClass} min-w-[38px] max-w-[38px] text-center cursor-pointer hover:ring-2 hover:ring-amber-500 transition ${bgColor} ${
                         isINJBrushActive ? 'ring-1 ring-amber-400 font-extrabold animate-pulse' : ''
                       }`}
-                      title={`แผนผลิต INJ วันที่ ${d.day} ${d.dayName}: ${injPlan || 'ยังไม่ได้ระบุ (คลิกเพื่อแก้ไข)'}`}
+                      title={`แผนผลิต INJ วันที่ ${d.day} ${d.monthName} (${d.dayName}): ${injPlan || 'ยังไม่ได้ระบุ (คลิกเพื่อแก้ไข)'}`}
                     >
                       <div className="text-[10px] font-extrabold truncate select-none">
                         {injPlan || '-'}
@@ -1115,10 +1339,11 @@ export const ShiftScheduler: React.FC = () => {
                   สัปดาห์ (Week)
                 </th>
                 {monthDays.map((d, idx) => {
-                  // Only show week label when week changes or first day
-                  const isNewWeek = idx === 0 || monthDays[idx - 1].weekNumber !== d.weekNumber;
+                  const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                   const isWeekEnd = d.isSaturday;
-                  const borderRightClass = isWeekEnd
+                  const borderRightClass = isMonthEnd
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
 
@@ -1145,8 +1370,12 @@ export const ShiftScheduler: React.FC = () => {
                   วันที่ (Date)
                 </th>
                 {monthDays.map((d, idx) => {
+                  const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                   const isWeekEnd = d.isSaturday;
-                  const borderRightClass = isWeekEnd
+                  const isNextMonthFirstDay = !d.isCurrentMonth && d.day === 1;
+                  const borderRightClass = isMonthEnd
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
 
@@ -1156,15 +1385,26 @@ export const ShiftScheduler: React.FC = () => {
                     ? 'bg-rose-200 dark:bg-rose-900/60 text-rose-900 dark:text-rose-200'
                     : d.holiday
                     ? 'bg-orange-200 dark:bg-orange-900/60 text-orange-900 dark:text-orange-200'
+                    : isNextMonthFirstDay
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50'
                     : '';
 
                   return (
                     <th
                       key={`date-${d.dateStr}`}
+                      data-is-today={d.isToday ? 'true' : undefined}
+                      data-first-of-next-month={isNextMonthFirstDay ? 'true' : undefined}
                       className={`p-1.5 text-center min-w-[38px] max-w-[38px] text-[11px] ${borderRightClass} ${dateBg}`}
                     >
-                      <div>{d.day}</div>
-                      <div className={`text-[9px] ${d.isToday ? 'font-bold text-white' : 'font-normal text-slate-500 dark:text-slate-400'}`}>
+                      <div className={isNextMonthFirstDay ? 'text-emerald-700 dark:text-emerald-400 font-extrabold flex flex-col items-center justify-center leading-tight' : ''}>
+                        <span>{d.day}</span>
+                        {isNextMonthFirstDay && (
+                          <span className="text-[9px] bg-emerald-600 text-white dark:bg-emerald-700 px-1 py-0.2 rounded font-black mt-0.5">
+                            {d.monthShort}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-[9px] ${d.isToday ? 'font-bold text-white' : isNextMonthFirstDay ? 'font-bold text-emerald-700 dark:text-emerald-400' : 'font-normal text-slate-500 dark:text-slate-400'}`}>
                         {d.isToday ? 'วันนี้' : d.holiday ? 'HL' : d.dayName}
                       </div>
                     </th>
@@ -1185,8 +1425,11 @@ export const ShiftScheduler: React.FC = () => {
                   </th>
                 )}
                 {monthDays.map((d, idx) => {
+                  const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                   const isWeekEnd = d.isSaturday;
-                  const borderRightClass = isWeekEnd
+                  const borderRightClass = isMonthEnd
+                    ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                    : isWeekEnd
                     ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                     : 'border-r border-slate-200 dark:border-slate-700';
 
@@ -1253,8 +1496,11 @@ export const ShiftScheduler: React.FC = () => {
                           colorBorder: 'border-slate-300',
                         };
 
+                        const isMonthEnd = d.isLastDayOfMonth && idx < monthDays.length - 1;
                         const isWeekEnd = d.isSaturday;
-                        const borderRightClass = isWeekEnd
+                        const borderRightClass = isMonthEnd
+                          ? 'border-r-4 border-r-indigo-600 dark:border-r-indigo-400'
+                          : isWeekEnd
                           ? 'border-r-2 border-r-slate-900 dark:border-r-slate-100'
                           : 'border-r border-slate-200 dark:border-slate-800';
 
@@ -1265,7 +1511,7 @@ export const ShiftScheduler: React.FC = () => {
                             className={`p-1.5 text-center font-bold text-xs ${borderRightClass} cursor-pointer transition hover:scale-105 ${
                               shiftInfo.colorBg
                             } ${shiftInfo.colorText}`}
-                            title={`${emp.name} (${emp.codeName}) - ${d.dateStr}: ${shiftInfo.nameTh} (${shiftInfo.description})`}
+                            title={`${emp.name} (${emp.codeName}) - ${d.dateStr} (${d.day} ${d.monthName}): ${shiftInfo.nameTh} (${shiftInfo.description})`}
                           >
                             {code}
                           </td>

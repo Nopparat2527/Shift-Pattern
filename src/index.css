@@ -2,3 +2,32 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Custom horizontal scrollbar for shift schedule table */
+.custom-schedule-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 rgba(148, 163, 184, 0.2);
+  scroll-behavior: smooth;
+}
+
+.custom-schedule-scrollbar::-webkit-scrollbar {
+  height: 12px;
+}
+
+.custom-schedule-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+}
+
+.custom-schedule-scrollbar::-webkit-scrollbar-thumb {
+  background: #6366f1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-schedule-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4f46e5;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
